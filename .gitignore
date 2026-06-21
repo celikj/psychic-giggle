@@ -1,4 +1,9 @@
 node_modules
 dist
+dist-single
+release
+dist-bin
+launcher/embedded.cjs
+TaskLock.html
 .DS_Store
 *.local

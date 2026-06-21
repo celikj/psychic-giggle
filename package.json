@@ -6,14 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:single": "cross-env SINGLEFILE=1 vite build",
+    "embed": "node launcher/embed.cjs",
+    "build:exe": "npm run build:single && npm run embed && pkg launcher/server.cjs --config pkg.json --out-path release",
+    "start:launcher": "node launcher/server.cjs"
   },
+  "bin": "launcher/server.cjs",
   "dependencies": {
+    "lucide-react": "^0.441.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "lucide-react": "^0.441.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@yao-pkg/pkg": "^6.3.0",
+    "cross-env": "^7.0.3",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
@@ -21,6 +28,7 @@
     "postcss": "^8.4.45",
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.4",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }
