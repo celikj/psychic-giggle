@@ -2,6 +2,10 @@ name: Release
 
 # Build TaskLock desktop executables and publish them to a GitHub Release.
 # Triggered by pushing a tag like v1.0.0, or manually from the Actions tab.
+#
+# Executables are produced with Bun's cross-compiler (bun build --compile),
+# which bundles the launcher + embedded UI into a single native binary per
+# platform — no Node base download or from-source compilation required.
 
 on:
   push:
@@ -18,31 +22,19 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: node18-linux-x64
-            asset: tasklock-linux-x64
-          - os: macos-13
-            target: node18-macos-x64
-            asset: tasklock-macos-x64
-          - os: macos-latest
-            target: node18-macos-arm64
-            asset: tasklock-macos-arm64
-          - os: windows-latest
-            target: node18-win-x64
-            asset: tasklock-win-x64.exe
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Install dependencies
         run: npm ci
@@ -53,46 +45,26 @@ jobs:
       - name: Embed bundle into launcher
         run: npm run embed
 
-      - name: Build executable
-        run: npx pkg launcher/server.cjs --targets ${{ matrix.target }} --output "dist-bin/${{ matrix.asset }}"
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset }}
-          path: dist-bin/${{ matrix.asset }}
-          if-no-files-found: error
-
-  release:
-    name: Publish Release
-    needs: build
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-
       - name: Build standalone HTML (no-install version)
-        run: |
-          npm run build:single
-          cp dist-single/index.html TaskLock.html
+        run: cp dist-single/index.html TaskLock.html
 
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          path: artifacts
-
-      - name: Collect release assets
+      - name: Cross-compile executables with Bun
         run: |
-          mkdir -p release-assets artifacts
-          find artifacts -type f -exec cp {} release-assets/ \; || true
+          mkdir -p release-assets
+          targets=(
+            "bun-linux-x64:tasklock-linux-x64"
+            "bun-linux-arm64:tasklock-linux-arm64"
+            "bun-darwin-x64:tasklock-macos-x64"
+            "bun-darwin-arm64:tasklock-macos-arm64"
+            "bun-windows-x64:tasklock-win-x64.exe"
+          )
+          for entry in "${targets[@]}"; do
+            target="${entry%%:*}"
+            name="${entry##*:}"
+            echo "::group::Building $name ($target)"
+            bun build launcher/server.cjs --compile --target="$target" --outfile "release-assets/$name"
+            echo "::endgroup::"
+          done
           cp TaskLock.html release-assets/
           chmod +x release-assets/tasklock-linux-* release-assets/tasklock-macos-* 2>/dev/null || true
           ls -la release-assets
@@ -124,10 +96,11 @@ jobs:
             | 🍎 macOS (Apple Silicon) | `tasklock-macos-arm64` |
             | 🍎 macOS (Intel) | `tasklock-macos-x64` |
             | 🐧 Linux (x64) | `tasklock-linux-x64` |
+            | 🐧 Linux (arm64) | `tasklock-linux-arm64` |
             | 🌐 Any (browser) | `TaskLock.html` — double-click to open, no install |
 
             ### Running it
-            - **Desktop binary:** download, then run it. It starts a local server and opens TaskLock in your browser. On macOS/Linux you may need `chmod +x tasklock-*` first.
+            - **Desktop binary:** download, then run it. It starts a local server and opens TaskLock in your browser. On macOS/Linux run `chmod +x tasklock-*` first; on macOS you may also need to allow it under System Settings → Privacy & Security.
             - **TaskLock.html:** just double-click — the entire app is self-contained in one file.
 
             All data is stored locally in your browser. Nothing is uploaded.

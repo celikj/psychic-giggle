@@ -23,6 +23,7 @@ Download the binary for your platform from [Releases](../../releases):
 | 🍎 macOS (Apple Silicon) | `tasklock-macos-arm64` |
 | 🍎 macOS (Intel) | `tasklock-macos-x64` |
 | 🐧 Linux (x64) | `tasklock-linux-x64` |
+| 🐧 Linux (arm64) | `tasklock-linux-arm64` |
 
 It starts a tiny local server and opens TaskLock in your browser. On macOS/Linux run `chmod +x tasklock-*` first.
 
@@ -38,7 +39,7 @@ npm run dev        # development server
 ```bash
 npm run build         # static site -> dist/
 npm run build:single  # self-contained single-file -> dist-single/index.html
-npm run build:exe     # native executable -> release/ (requires network for pkg base)
+npm run build:exe     # native executable for the current OS -> release/ (uses Bun)
 ```
 
 ## Releases
@@ -50,4 +51,4 @@ GitHub Release. See [`.github/workflows/release.yml`](.github/workflows/release.
 ## Stack
 
 React + TypeScript + Vite + Tailwind CSS. Executables are produced by inlining
-the single-file build into a Node launcher and compiling with `@yao-pkg/pkg`.
+the single-file build into a launcher and cross-compiling with `bun build --compile`.

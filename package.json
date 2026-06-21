@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "build:single": "cross-env SINGLEFILE=1 vite build",
     "embed": "node launcher/embed.cjs",
-    "build:exe": "npm run build:single && npm run embed && pkg launcher/server.cjs --config pkg.json --out-path release",
+    "build:exe": "npm run build:single && npm run embed && bun build launcher/server.cjs --compile --outfile release/tasklock",
     "start:launcher": "node launcher/server.cjs"
   },
   "bin": "launcher/server.cjs",
@@ -19,7 +19,6 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@yao-pkg/pkg": "^6.3.0",
     "cross-env": "^7.0.3",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
