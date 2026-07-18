@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Lock, Unlock, Plus, Trash2, Globe, X, ExternalLink, Shield, ShieldCheck, ChevronRight, Loader2 } from 'lucide-react';
+import { Lock, Unlock, Shield, ShieldCheck, ChevronRight, Loader2, Smartphone } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import { useScreenTime } from '../hooks/useScreenTime';
 
 interface Props { store: Store }
 
 export default function BlockerView({ store }: Props) {
-  const { blockedApps, allLockingDone, lockingLeft, todayTasks, completedToday, addBlockedApp, removeBlockedApp } = store;
+  const { allLockingDone, lockingLeft, todayTasks, completedToday } = store;
 
   const st = useScreenTime();
   // Keep the OS shield in step with whether locking tasks remain.
@@ -15,11 +15,6 @@ export default function BlockerView({ store }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allLockingDone, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
 
-  const [lockedApp, setLockedApp] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState('🌐');
-  const [url, setUrl] = useState('');
   const [celebrated, setCelebrated] = useState(false);
   const prevDone = useRef(allLockingDone);
 
@@ -35,25 +30,8 @@ export default function BlockerView({ store }: Props) {
   const lockingDone = lockingTasks.filter(t => t.completed).length;
   const lockingPct = lockingTasks.length === 0 ? 100 : Math.round((lockingDone / lockingTasks.length) * 100);
 
-  const handleAppClick = (appId: string, appUrl: string) => {
-    if (allLockingDone) {
-      window.open(appUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      setLockedApp(appId);
-    }
-  };
-
-  const handleAddApp = () => {
-    if (!name.trim() || !url.trim()) return;
-    const normalized = url.startsWith('http') ? url : `https://${url}`;
-    addBlockedApp(name.trim(), icon, normalized);
-    setName('');
-    setIcon('🌐');
-    setUrl('');
-    setShowAdd(false);
-  };
-
-  const PRESET_ICONS = ['📸', '🐦', '▶️', '🎵', '🟠', '💼', '🎮', '📰', '🛒', '📧', '🌐', '💬'];
+  const approved = st.status.authorization === 'approved';
+  const hasSelection = st.status.selectionCount > 0;
 
   return (
     <div className="flex flex-col pb-24">
@@ -64,47 +42,6 @@ export default function BlockerView({ store }: Props) {
             <div className="text-6xl mb-3">🎉</div>
             <p className="text-white font-bold text-xl">Apps Unlocked!</p>
             <p className="text-green-300/70 text-sm mt-1">All locking tasks done</p>
-          </div>
-        </div>
-      )}
-
-      {/* Locked app modal */}
-      {lockedApp && (
-        <div
-          className="fixed inset-0 z-40 flex items-end justify-center"
-          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
-          onClick={() => setLockedApp(null)}
-        >
-          <div
-            className="w-full max-w-md bg-[#1a1a20] rounded-t-3xl border border-white/10 p-8 pb-12 text-center animate-slide-up"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto mb-4 pulse-red">
-              <Lock className="w-8 h-8 text-red-400" />
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">App Locked</h2>
-            <p className="text-white/50 text-sm mb-6">
-              Complete <span className="text-white font-semibold">{lockingLeft} more locking task{lockingLeft !== 1 ? 's' : ''}</span> to unlock your apps.
-            </p>
-            {/* Progress */}
-            <div className="bg-white/5 rounded-2xl p-4 mb-6">
-              <div className="flex justify-between text-xs text-white/40 mb-2">
-                <span>Locking tasks</span>
-                <span>{lockingDone} / {lockingTasks.length}</span>
-              </div>
-              <div className="h-2 bg-white/8 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[#FF6B35] transition-all duration-700"
-                  style={{ width: `${lockingPct}%` }}
-                />
-              </div>
-            </div>
-            <button
-              onClick={() => setLockedApp(null)}
-              className="w-full py-4 rounded-2xl bg-[#FF6B35] text-white font-semibold active:scale-95 transition-transform"
-            >
-              Back to Tasks
-            </button>
           </div>
         </div>
       )}
@@ -121,8 +58,7 @@ export default function BlockerView({ store }: Props) {
           >
             {allLockingDone
               ? <Unlock className="w-6 h-6 text-green-400" />
-              : <Lock className="w-6 h-6 text-red-400" />
-            }
+              : <Lock className="w-6 h-6 text-red-400" />}
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">
@@ -130,13 +66,12 @@ export default function BlockerView({ store }: Props) {
             </h1>
             <p className="text-sm text-white/40">
               {allLockingDone
-                ? 'Great job! All your apps are accessible.'
-                : `Complete ${lockingLeft} more task${lockingLeft !== 1 ? 's' : ''} to unlock`}
+                ? 'Great job! Your apps are open.'
+                : `Finish ${lockingLeft} task${lockingLeft !== 1 ? 's' : ''} to unlock`}
             </p>
           </div>
         </div>
 
-        {/* Progress bar */}
         {!allLockingDone && (
           <div className="mt-4">
             <div className="flex justify-between text-xs text-white/30 mb-2">
@@ -160,258 +95,124 @@ export default function BlockerView({ store }: Props) {
         )}
       </div>
 
-      {/* Native Screen Time blocker */}
-      {st.isNativeIOS && st.status.supported && (
-        <div className="px-4 mb-5">
-          <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4">
+      {/* ---- Native Screen Time blocker (iOS only) ---- */}
+      {st.isNativeIOS && (
+        <div className="px-4">
+          <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-[#FF6B35]/15 border border-[#FF6B35]/25 flex items-center justify-center flex-shrink-0">
                 <Shield className="w-5 h-5 text-[#FF6B35]" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">Real App Blocking</p>
-                <p className="text-xs text-white/40">Locks real apps system-wide with Screen Time</p>
+                <p className="text-sm font-semibold text-white">App Blocker</p>
+                <p className="text-xs text-white/40">Blocks real apps with Apple Screen Time</p>
               </div>
               {st.busy && <Loader2 className="w-4 h-4 text-white/40 animate-spin" />}
             </div>
 
-            {st.status.authorization !== 'approved' && (
-              <button
-                onClick={st.requestPermission}
-                disabled={st.busy}
-                className="mt-4 w-full py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold active:scale-95 transition-transform disabled:opacity-50"
-              >
-                {st.status.authorization === 'denied' ? 'Access denied — enable in Settings › Screen Time' : 'Turn on app blocking'}
-              </button>
+            {/* Not supported */}
+            {!st.status.supported && (
+              <p className="mt-4 text-xs text-white/40 leading-relaxed">
+                App blocking needs iOS&nbsp;16 or later. Update your iPhone to use it.
+              </p>
             )}
 
-            {st.status.authorization === 'approved' && st.status.selectionCount === 0 && (
-              <button
-                onClick={st.chooseApps}
-                disabled={st.busy}
-                className="mt-4 w-full flex items-center justify-between py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold text-white active:scale-95 transition-transform disabled:opacity-50"
-              >
-                <span>Choose apps to block</span>
-                <ChevronRight className="w-4 h-4 text-white/40" />
-              </button>
+            {/* Step 1 — permission */}
+            {st.status.supported && !approved && (
+              <>
+                <p className="mt-4 text-xs text-white/40 leading-relaxed">
+                  Grant Screen Time access, then pick the apps you want locked while tasks are pending.
+                </p>
+                <button
+                  onClick={st.requestPermission}
+                  disabled={st.busy}
+                  className="mt-3 w-full py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  {st.status.authorization === 'denied'
+                    ? 'Denied — enable in Settings › Screen Time'
+                    : 'Grant Screen Time access'}
+                </button>
+              </>
             )}
 
-            {st.status.authorization === 'approved' && st.status.selectionCount > 0 && (
+            {/* Step 2 — pick apps via Apple's system picker */}
+            {st.status.supported && approved && (
               <div className="mt-4 space-y-3">
                 <button
                   onClick={st.chooseApps}
                   disabled={st.busy}
-                  className="w-full flex items-center justify-between py-3 px-4 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition-transform disabled:opacity-50"
+                  className={`w-full flex items-center justify-between py-3.5 px-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50 ${
+                    hasSelection ? 'bg-white/5 border border-white/10' : 'bg-[#FF6B35]'
+                  }`}
                 >
-                  <span className="text-sm font-semibold text-white">
-                    {st.status.selectionCount} app{st.status.selectionCount !== 1 ? 's' : ''} & categories selected
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <Smartphone className={`w-4 h-4 flex-shrink-0 ${hasSelection ? 'text-white/50' : 'text-white'}`} />
+                    <span className="text-sm font-semibold text-white truncate">
+                      {hasSelection
+                        ? `${st.status.selectionCount} app${st.status.selectionCount !== 1 ? 's' : ''} & categories selected`
+                        : 'Choose apps to block'}
+                    </span>
                   </span>
-                  <span className="text-xs text-white/40 flex items-center gap-1">Change <ChevronRight className="w-3.5 h-3.5" /></span>
+                  <span className="text-xs text-white/50 flex items-center gap-1 flex-shrink-0">
+                    {hasSelection ? 'Change' : 'Pick'} <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
                 </button>
 
-                <div className="flex items-center justify-between py-1">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-white">Lock until tasks done</p>
-                    <p className="text-xs text-white/40">
-                      {!st.enabled ? 'Off' : st.status.blocking ? 'Apps are locked right now' : 'Unlocked — all tasks done'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => st.setEnabled(!st.enabled)}
-                    className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${st.enabled ? 'bg-[#FF6B35]' : 'bg-white/15'}`}
-                    aria-label="Toggle app blocking"
-                  >
-                    <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${st.enabled ? 'left-6' : 'left-1'}`} />
-                  </button>
-                </div>
+                {hasSelection && (
+                  <>
+                    <div className="flex items-center justify-between py-1">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white">Lock until tasks done</p>
+                        <p className="text-xs text-white/40">
+                          {!st.enabled
+                            ? 'Off'
+                            : st.status.blocking
+                              ? 'Selected apps are locked right now'
+                              : 'Unlocked — all tasks done'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => st.setEnabled(!st.enabled)}
+                        className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${st.enabled ? 'bg-[#FF6B35]' : 'bg-white/15'}`}
+                        aria-label="Toggle app blocking"
+                      >
+                        <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${st.enabled ? 'left-6' : 'left-1'}`} />
+                      </button>
+                    </div>
 
-                {st.enabled && (
-                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold border ${
-                    st.status.blocking
-                      ? 'bg-red-500/10 border-red-500/20 text-red-400'
-                      : 'bg-green-500/10 border-green-500/20 text-green-400'
-                  }`}>
-                    {st.status.blocking
-                      ? <><Lock className="w-3.5 h-3.5" /> Locked — finish {lockingLeft} task{lockingLeft !== 1 ? 's' : ''} to unlock</>
-                      : <><ShieldCheck className="w-3.5 h-3.5" /> Unlocked</>}
-                  </div>
+                    {st.enabled && (
+                      <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold border ${
+                        st.status.blocking
+                          ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                          : 'bg-green-500/10 border-green-500/20 text-green-400'
+                      }`}>
+                        {st.status.blocking
+                          ? <><Lock className="w-3.5 h-3.5" /> Locked — finish {lockingLeft} task{lockingLeft !== 1 ? 's' : ''} to unlock</>
+                          : <><ShieldCheck className="w-3.5 h-3.5" /> Unlocked</>}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
           </div>
+
+          <p className="text-center text-[11px] text-white/25 mt-4 px-6 leading-relaxed">
+            Mark a task as a <span className="text-white/50 font-medium">Locking Task</span> on the Tasks screen, and your chosen apps stay blocked until it's done.
+          </p>
         </div>
       )}
 
-      {/* Web hint on non-iOS */}
+      {/* ---- Web / non-iOS ---- */}
       {!st.isNativeIOS && (
-        <div className="px-4 mb-5">
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex items-start gap-3">
-            <Shield className="w-5 h-5 text-white/30 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-white/40 leading-relaxed">
-              System-wide app blocking works in the <span className="text-white/70 font-semibold">iOS app</span>. The links below are quick shortcuts you can lock behind your tasks.
+        <div className="px-4">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-center">
+            <div className="text-4xl mb-3">📱</div>
+            <p className="text-white/70 text-sm font-semibold">Real app blocking runs on iPhone</p>
+            <p className="text-white/35 text-xs mt-2 leading-relaxed">
+              In the iOS app you pick apps with Apple's own Screen Time picker, and they're blocked system-wide until your locking tasks are done.
             </p>
           </div>
-        </div>
-      )}
-
-      {/* App list */}
-      <div className="px-4 space-y-2">
-        <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest px-1 mb-3">
-          Quick Links ({blockedApps.length})
-        </p>
-
-        {blockedApps.length === 0 && !showAdd && (
-          <div className="text-center py-12 animate-slide-up">
-            <div className="text-5xl mb-3">🛡️</div>
-            <p className="text-white/30 text-sm font-medium">No apps blocked yet</p>
-            <p className="text-white/20 text-xs mt-1">Add distracting apps to block them</p>
-          </div>
-        )}
-
-        {blockedApps.map((app, i) => (
-          <div
-            key={app.id}
-            className={`flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 animate-slide-in ${
-              allLockingDone
-                ? 'bg-[#141417] border-white/[0.07]'
-                : 'bg-[#0f0f12] border-white/[0.04] opacity-75'
-            }`}
-            style={{ animationDelay: `${i * 40}ms` }}
-          >
-            {/* App icon */}
-            <div
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 border transition-all ${
-                allLockingDone ? 'border-white/10 bg-white/5' : 'border-white/5 bg-white/[0.02]'
-              }`}
-            >
-              {app.icon}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold ${allLockingDone ? 'text-white' : 'text-white/50'}`}>
-                {app.name}
-              </p>
-              <p className="text-xs text-white/25 truncate mt-0.5">{app.url}</p>
-            </div>
-
-            {/* Status badge */}
-            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-xl border text-xs font-semibold flex-shrink-0 ${
-              allLockingDone
-                ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                : 'bg-red-500/10 border-red-500/20 text-red-400'
-            }`}>
-              {allLockingDone
-                ? <><Unlock className="w-3 h-3" /> Open</>
-                : <><Lock className="w-3 h-3" /> Locked</>
-              }
-            </div>
-
-            {/* Open / locked button */}
-            <button
-              onClick={() => handleAppClick(app.id, app.url)}
-              className={`p-2 rounded-xl transition-all active:scale-90 ${
-                allLockingDone
-                  ? 'bg-white/10 hover:bg-white/15 text-white'
-                  : 'bg-white/5 text-white/20'
-              }`}
-            >
-              {allLockingDone ? <ExternalLink className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-            </button>
-
-            {/* Delete */}
-            <button
-              onClick={() => removeBlockedApp(app.id)}
-              className="p-1.5 rounded-xl hover:bg-white/10 transition-colors"
-            >
-              <Trash2 className="w-4 h-4 text-white/15 hover:text-red-400 transition-colors" />
-            </button>
-          </div>
-        ))}
-
-        {/* Add app form */}
-        {showAdd && (
-          <div className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-4 animate-slide-up">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-white">Add App to Block</span>
-              <button onClick={() => setShowAdd(false)} className="p-1 rounded-lg hover:bg-white/10">
-                <X className="w-4 h-4 text-white/30" />
-              </button>
-            </div>
-
-            <div className="flex gap-2">
-              <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
-                {icon}
-              </div>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="App name (e.g. Instagram)"
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 text-white placeholder-white/25 text-sm font-medium outline-none"
-              />
-            </div>
-
-            {/* Icon picker */}
-            <div>
-              <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Icon</p>
-              <div className="grid grid-cols-6 gap-1.5">
-                {PRESET_ICONS.map(e => (
-                  <button
-                    key={e}
-                    onClick={() => setIcon(e)}
-                    className={`w-full aspect-square rounded-xl text-xl flex items-center justify-center transition-all ${
-                      icon === e ? 'bg-white/15 scale-110' : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* URL input */}
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-3">
-              <Globe className="w-4 h-4 text-white/30 flex-shrink-0" />
-              <input
-                type="text"
-                value={url}
-                onChange={e => setUrl(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddApp()}
-                placeholder="URL (e.g. instagram.com)"
-                className="flex-1 bg-transparent text-white placeholder-white/25 text-sm font-medium outline-none"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowAdd(false)}
-                className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddApp}
-                disabled={!name.trim() || !url.trim()}
-                className="flex-1 py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
-              >
-                Block App
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* FAB */}
-      {!showAdd && (
-        <div className="px-4 mt-4">
-          <button
-            onClick={() => setShowAdd(true)}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#FF6B35] text-white font-semibold text-sm active:scale-95 transition-transform"
-            style={{ boxShadow: '0 8px 24px rgba(255,107,53,0.35)' }}
-          >
-            <Plus className="w-5 h-5" />
-            Block an App
-          </button>
         </div>
       )}
     </div>
