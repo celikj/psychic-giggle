@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.tasklock.app',
+  appId: 'com.celikj.tasklock',
   appName: 'TaskLock',
   webDir: 'dist',
   ios: {

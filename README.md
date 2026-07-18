@@ -39,7 +39,7 @@ npm run build
 npx cap sync ios
 npx cap open ios     # opens ios/App/App.xcodeproj in Xcode
 ```
-In Xcode: select your iPhone, set a Team under *Signing & Capabilities* (a free personal team works), then press ▶︎ Run. Bundle id is `com.tasklock.app`.
+In Xcode: select your iPhone, set a Team under *Signing & Capabilities* (a free personal team works), then press ▶︎ Run. Bundle id is `com.celikj.tasklock`.
 
 > Note: the in-app "App Blocker" demonstrates the flow, but actually blocking *other* iOS apps requires Apple's Screen Time / Family Controls entitlement, which is a separate native integration.
 

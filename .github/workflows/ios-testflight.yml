@@ -14,7 +14,7 @@ name: iOS TestFlight
 #   1. Users and Access → Integrations → App Store Connect API → generate a
 #      team key with the "App Manager" role. Note Issuer ID + Key ID, download
 #      the .p8 (you can only download it once).
-#   2. Apps → + → New App, bundle id com.tasklock.app, so a record exists.
+#   2. Apps → + → New App, bundle id com.celikj.tasklock, so a record exists.
 
 on:
   workflow_dispatch:
