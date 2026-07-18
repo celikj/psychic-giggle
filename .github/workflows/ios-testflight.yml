@@ -1,0 +1,109 @@
+name: iOS TestFlight
+
+# Signs TaskLock with your App Store Connect API key (cloud signing — no
+# certificates to manage) and uploads it to TestFlight. You then install it
+# from the TestFlight app on your iPhone. No Mac required on your end.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   APPSTORE_ISSUER_ID   – App Store Connect API key Issuer ID (a UUID)
+#   APPSTORE_KEY_ID      – App Store Connect API key ID (e.g. ABC123DEF4)
+#   APPSTORE_PRIVATE_KEY – contents of the AuthKey_XXXX.p8 file (paste as-is)
+#   APPLE_TEAM_ID        – your 10-char Apple Developer Team ID
+#
+# One-time setup in App Store Connect before the first run:
+#   1. Users and Access → Integrations → App Store Connect API → generate a
+#      team key with the "App Manager" role. Note Issuer ID + Key ID, download
+#      the .p8 (you can only download it once).
+#   2. Apps → + → New App, bundle id com.tasklock.app, so a record exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Build number (must be higher than the last upload)'
+        required: true
+        default: '1'
+
+jobs:
+  testflight:
+    name: Build & upload to TestFlight
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios
+
+      - name: Write App Store Connect API key
+        env:
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$APPSTORE_PRIVATE_KEY" > ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8
+
+      - name: Set build number
+        working-directory: ios/App
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.event.inputs.build_number }}" App/Info.plist || \
+            agvtool new-version -all ${{ github.event.inputs.build_number }} || true
+          plutil -p App/Info.plist | grep -i version || true
+
+      - name: Archive (Xcode-managed cloud signing)
+        working-directory: ios/App
+        run: |
+          xcodebuild -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }} \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            CODE_SIGN_STYLE=Automatic \
+            archive
+
+      - name: Export signed .ipa
+        working-directory: ios/App
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}
+          ls -la "$RUNNER_TEMP/export"
+
+      - name: Upload to TestFlight
+        run: |
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+          echo "Uploading $IPA"
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey ${{ secrets.APPSTORE_KEY_ID }} \
+            --apiIssuer ${{ secrets.APPSTORE_ISSUER_ID }}
