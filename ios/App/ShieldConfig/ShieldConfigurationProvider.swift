@@ -4,7 +4,7 @@ import UIKit
 
 /// Draws TaskLock's custom block screen in place of Apple's default
 /// "Restricted / hourglass" shield.
-class ShieldConfigurationProvider: ShieldConfigurationDataProvider {
+class ShieldConfigurationProvider: ShieldConfigurationDataSource {
 
     private func shield(for name: String?) -> ShieldConfiguration {
         let orange = UIColor(red: 1.0, green: 0.42, blue: 0.21, alpha: 1.0)   // #FF6B35
