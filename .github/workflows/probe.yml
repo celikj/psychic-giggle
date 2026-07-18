@@ -1,0 +1,23 @@
+name: SDK Probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: macos-latest
+    steps:
+      - name: Dump ManagedSettingsUI API
+        run: |
+          echo "Xcode: $(xcodebuild -version | head -1)"
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK=$SDK"
+          echo "=== ManagedSettingsUI interface files ==="
+          FILES=$(find "$SDK" -path "*ManagedSettingsUI*" -name "*.swiftinterface" 2>/dev/null)
+          echo "$FILES"
+          for f in $FILES; do
+            echo "===== $f ====="
+            grep -nE "class |protocol |struct ShieldConfiguration|func configuration|DataProvider" "$f" | head -80
+          done
+          echo "=== grep whole SDK for ShieldConfigurationDataProvider ==="
+          grep -rl "ShieldConfigurationDataProvider" "$SDK" 2>/dev/null | head
