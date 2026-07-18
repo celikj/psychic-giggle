@@ -9,15 +9,16 @@ jobs:
     steps:
       - name: Dump ManagedSettingsUI API
         run: |
-          echo "Xcode: $(xcodebuild -version | head -1)"
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "SDK=$SDK"
-          echo "=== ManagedSettingsUI interface files ==="
-          FILES=$(find "$SDK" -path "*ManagedSettingsUI*" -name "*.swiftinterface" 2>/dev/null)
-          echo "$FILES"
-          for f in $FILES; do
-            echo "===== $f ====="
-            grep -nE "class |protocol |struct ShieldConfiguration|func configuration|DataProvider" "$f" | head -80
-          done
-          echo "=== grep whole SDK for ShieldConfigurationDataProvider ==="
-          grep -rl "ShieldConfigurationDataProvider" "$SDK" 2>/dev/null | head
+          set +e
+          xcrun swift-api-digester -dump-sdk -module ManagedSettingsUI \
+            -target arm64-apple-ios15.0 -sdk "$SDK" -o msu.json 2> err.txt
+          echo "digester exit: $?"
+          echo "=== err (head) ==="; head -20 err.txt
+          echo "=== Shield-related decls ==="
+          grep -oE '"printedName": "[^"]*[Ss]hield[^"]*"' msu.json | sort -u | head -100
+          echo "=== configuration() methods ==="
+          grep -oE '"printedName": "configuration[^"]*"' msu.json | sort -u
+          echo "=== top-level Class names ==="
+          grep -oE '"printedName": "[A-Z][A-Za-z0-9]+", *$' msu.json | sort -u | head -80
