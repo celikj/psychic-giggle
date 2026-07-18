@@ -1,11 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { Lock, Unlock, Plus, Trash2, Globe, X, ExternalLink } from 'lucide-react';
+import { Lock, Unlock, Plus, Trash2, Globe, X, ExternalLink, Shield, ShieldCheck, ChevronRight, Loader2 } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
+import { useScreenTime } from '../hooks/useScreenTime';
 
 interface Props { store: Store }
 
 export default function BlockerView({ store }: Props) {
   const { blockedApps, allLockingDone, lockingLeft, todayTasks, completedToday, addBlockedApp, removeBlockedApp } = store;
+
+  const st = useScreenTime();
+  // Keep the OS shield in step with whether locking tasks remain.
+  useEffect(() => {
+    st.sync(!allLockingDone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allLockingDone, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
 
   const [lockedApp, setLockedApp] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -152,10 +160,104 @@ export default function BlockerView({ store }: Props) {
         )}
       </div>
 
+      {/* Native Screen Time blocker */}
+      {st.isNativeIOS && st.status.supported && (
+        <div className="px-4 mb-5">
+          <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#FF6B35]/15 border border-[#FF6B35]/25 flex items-center justify-center flex-shrink-0">
+                <Shield className="w-5 h-5 text-[#FF6B35]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">Real App Blocking</p>
+                <p className="text-xs text-white/40">Locks real apps system-wide with Screen Time</p>
+              </div>
+              {st.busy && <Loader2 className="w-4 h-4 text-white/40 animate-spin" />}
+            </div>
+
+            {st.status.authorization !== 'approved' && (
+              <button
+                onClick={st.requestPermission}
+                disabled={st.busy}
+                className="mt-4 w-full py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {st.status.authorization === 'denied' ? 'Access denied — enable in Settings › Screen Time' : 'Turn on app blocking'}
+              </button>
+            )}
+
+            {st.status.authorization === 'approved' && st.status.selectionCount === 0 && (
+              <button
+                onClick={st.chooseApps}
+                disabled={st.busy}
+                className="mt-4 w-full flex items-center justify-between py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold text-white active:scale-95 transition-transform disabled:opacity-50"
+              >
+                <span>Choose apps to block</span>
+                <ChevronRight className="w-4 h-4 text-white/40" />
+              </button>
+            )}
+
+            {st.status.authorization === 'approved' && st.status.selectionCount > 0 && (
+              <div className="mt-4 space-y-3">
+                <button
+                  onClick={st.chooseApps}
+                  disabled={st.busy}
+                  className="w-full flex items-center justify-between py-3 px-4 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  <span className="text-sm font-semibold text-white">
+                    {st.status.selectionCount} app{st.status.selectionCount !== 1 ? 's' : ''} & categories selected
+                  </span>
+                  <span className="text-xs text-white/40 flex items-center gap-1">Change <ChevronRight className="w-3.5 h-3.5" /></span>
+                </button>
+
+                <div className="flex items-center justify-between py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">Lock until tasks done</p>
+                    <p className="text-xs text-white/40">
+                      {!st.enabled ? 'Off' : st.status.blocking ? 'Apps are locked right now' : 'Unlocked — all tasks done'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => st.setEnabled(!st.enabled)}
+                    className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${st.enabled ? 'bg-[#FF6B35]' : 'bg-white/15'}`}
+                    aria-label="Toggle app blocking"
+                  >
+                    <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${st.enabled ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                {st.enabled && (
+                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold border ${
+                    st.status.blocking
+                      ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                      : 'bg-green-500/10 border-green-500/20 text-green-400'
+                  }`}>
+                    {st.status.blocking
+                      ? <><Lock className="w-3.5 h-3.5" /> Locked — finish {lockingLeft} task{lockingLeft !== 1 ? 's' : ''} to unlock</>
+                      : <><ShieldCheck className="w-3.5 h-3.5" /> Unlocked</>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Web hint on non-iOS */}
+      {!st.isNativeIOS && (
+        <div className="px-4 mb-5">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 flex items-start gap-3">
+            <Shield className="w-5 h-5 text-white/30 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-white/40 leading-relaxed">
+              System-wide app blocking works in the <span className="text-white/70 font-semibold">iOS app</span>. The links below are quick shortcuts you can lock behind your tasks.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* App list */}
       <div className="px-4 space-y-2">
         <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest px-1 mb-3">
-          Blocked Apps ({blockedApps.length})
+          Quick Links ({blockedApps.length})
         </p>
 
         {blockedApps.length === 0 && !showAdd && (
