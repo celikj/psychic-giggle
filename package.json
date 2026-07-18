@@ -10,20 +10,28 @@
     "build:single": "cross-env SINGLEFILE=1 vite build",
     "embed": "node launcher/embed.cjs",
     "build:exe": "npm run build:single && npm run embed && bun build launcher/server.cjs --compile --outfile release/tasklock",
-    "start:launcher": "node launcher/server.cjs"
+    "start:launcher": "node launcher/server.cjs",
+    "sync:ios": "npm run build && npx cap sync ios",
+    "ios": "npm run build && npx cap sync ios && npx cap open ios"
   },
   "bin": "launcher/server.cjs",
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/ios": "^8.4.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "lucide-react": "^0.441.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
     "postcss": "^8.4.45",
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.4",

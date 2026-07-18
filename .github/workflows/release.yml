@@ -97,14 +97,81 @@ jobs:
             | 🍎 macOS (Intel) | `tasklock-macos-x64` |
             | 🐧 Linux (x64) | `tasklock-linux-x64` |
             | 🐧 Linux (arm64) | `tasklock-linux-arm64` |
+            | 📱 iOS (iPhone/iPad) | `TaskLock-unsigned.ipa` — sideload with AltStore/Sideloadly |
             | 🌐 Any (browser) | `TaskLock.html` — double-click to open, no install |
 
             ### Running it
+            - **iPhone/iPad:** the `.ipa` is **unsigned**. Install it with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) using a free Apple ID — no Mac required, works from Windows too. (Or open the `ios/` project in Xcode on a Mac and run it directly.)
             - **Desktop binary:** download, then run it. It starts a local server and opens TaskLock in your browser. On macOS/Linux run `chmod +x tasklock-*` first; on macOS you may also need to allow it under System Settings → Privacy & Security.
             - **TaskLock.html:** just double-click — the entire app is self-contained in one file.
 
-            All data is stored locally in your browser. Nothing is uploaded.
+            All data is stored locally on your device. Nothing is uploaded.
           files: release-assets/*
           generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  ios:
+    name: Build iOS .ipa (unsigned)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios
+
+      - name: Build unsigned .app
+        working-directory: ios/App
+        run: |
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned .ipa
+        working-directory: ios/App
+        run: |
+          APP_PATH="build/Build/Products/Release-iphoneos/App.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "App bundle not found at $APP_PATH" >&2
+            find build/Build/Products -maxdepth 2 -name '*.app' >&2 || true
+            exit 1
+          fi
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r TaskLock-unsigned.ipa Payload >/dev/null
+          ls -la TaskLock-unsigned.ipa
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload .ipa to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          files: ios/App/TaskLock-unsigned.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

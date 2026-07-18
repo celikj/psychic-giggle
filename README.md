@@ -27,7 +27,23 @@ Download the binary for your platform from [Releases](../../releases):
 
 It starts a tiny local server and opens TaskLock in your browser. On macOS/Linux run `chmod +x tasklock-*` first.
 
-### Option 3 — From source
+### Option 3 — iPhone / iPad (native iOS app)
+TaskLock ships as a real native iOS app via [Capacitor](https://capacitorjs.com).
+
+**Without a Mac** — download `TaskLock-unsigned.ipa` from [Releases](../../releases) and install it with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) using a free Apple ID (works from Windows too). Free-Apple-ID sideloads expire after 7 days and need a refresh.
+
+**With a Mac** — open the Xcode project and run it on your device:
+```bash
+npm install
+npm run build
+npx cap sync ios
+npx cap open ios     # opens ios/App/App.xcodeproj in Xcode
+```
+In Xcode: select your iPhone, set a Team under *Signing & Capabilities* (a free personal team works), then press ▶︎ Run. Bundle id is `com.tasklock.app`.
+
+> Note: the in-app "App Blocker" demonstrates the flow, but actually blocking *other* iOS apps requires Apple's Screen Time / Family Controls entitlement, which is a separate native integration.
+
+### Option 4 — From source (web)
 
 ```bash
 npm install
