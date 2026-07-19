@@ -21,6 +21,13 @@ html, body {
   height: 100%;
 }
 
+/* iOS Safari auto-zooms the page on focus for any input/textarea/select
+   rendered below 16px, and the viewport lock below can leave it stuck
+   zoomed in. Floor the font size so focus never triggers it. */
+input, textarea, select {
+  font-size: 16px;
+}
+
 ::-webkit-scrollbar {
   display: none;
 }

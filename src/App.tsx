@@ -93,7 +93,10 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen max-w-md mx-auto relative overflow-hidden animate-slide-up" style={{ background: '#0a0a0f' }}>
+    <div
+      className="max-w-md mx-auto relative overflow-hidden animate-slide-up flex flex-col"
+      style={{ background: '#0a0a0f', height: '100dvh' }}
+    >
       {showIntro && <Onboarding isNativeIOS={st.isNativeIOS} onDone={finishIntro} />}
 
       {celebrated && (
@@ -106,7 +109,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="overflow-y-auto" style={{ minHeight: '100vh' }}>
+      <div className="flex-1 overflow-y-auto min-h-0">
         {activeTab === 'tasks'    && <TasksView store={store} />}
         {activeTab === 'dailies'  && <DailiesView store={store} />}
         {activeTab === 'habits'   && <HabitsView store={store} />}
