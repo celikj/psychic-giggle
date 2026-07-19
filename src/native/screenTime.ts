@@ -16,6 +16,13 @@ export interface ScreenTimePlugin {
   selectApps(): Promise<{ count: number }>;
   startBlocking(): Promise<{ blocking: boolean }>;
   stopBlocking(): Promise<{ blocking: boolean }>;
+  /**
+   * Sync the midnight re-arm schedule: dates (local YYYY-MM-DD) that still
+   * have incomplete locking tasks. While enabled and non-empty, a native
+   * DeviceActivity schedule re-applies the shield at midnight without the
+   * app being opened.
+   */
+  updateSchedule(options: { dates: string[]; enabled: boolean }): Promise<{ monitoring: boolean }>;
 }
 
 // Native impl lives in ios/App/App/ScreenTimePlugin.swift (Family Controls).

@@ -7,6 +7,10 @@ import ManagedSettings
 import SwiftUI
 #endif
 
+#if canImport(DeviceActivity)
+import DeviceActivity
+#endif
+
 /// Native bridge to Apple's Screen Time (Family Controls) framework.
 ///
 /// Lets the web layer request authorization, pick which apps/categories to
@@ -23,6 +27,7 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "selectApps", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startBlocking", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopBlocking", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "updateSchedule", returnType: CAPPluginReturnPromise),
     ]
 
     private let selectionKey = "tasklock.familyActivitySelection"
@@ -32,15 +37,20 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @available(iOS 16.0, *)
     private func loadSelection() -> FamilyActivitySelection? {
-        guard let data = UserDefaults.standard.data(forKey: selectionKey) else { return nil }
-        return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
+        if let selection = TaskLockShared.loadSelection() { return selection }
+        // Migrate a selection saved before the App Group existed.
+        if let data = UserDefaults.standard.data(forKey: selectionKey),
+           let selection = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) {
+            TaskLockShared.saveSelection(selection)
+            UserDefaults.standard.removeObject(forKey: selectionKey)
+            return selection
+        }
+        return nil
     }
 
     @available(iOS 16.0, *)
     private func saveSelection(_ selection: FamilyActivitySelection) {
-        if let data = try? JSONEncoder().encode(selection) {
-            UserDefaults.standard.set(data, forKey: selectionKey)
-        }
+        TaskLockShared.saveSelection(selection)
     }
 
     @available(iOS 16.0, *)
@@ -50,11 +60,7 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @available(iOS 16.0, *)
     private func applyShield(_ selection: FamilyActivitySelection) {
-        managedStore.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
-        managedStore.shield.applicationCategories = selection.categoryTokens.isEmpty
-            ? nil
-            : .specific(selection.categoryTokens)
-        managedStore.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
+        TaskLockShared.applyShield(selection, to: managedStore)
     }
 
     private func clearShield() {
@@ -166,6 +172,54 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         #else
         call.reject("Screen Time blocking requires iOS 16 or later.")
         #endif
+    }
+
+    /// Syncs the midnight re-arm state. The web layer calls this whenever the
+    /// set of dates with pending locking tasks (or the enabled flag) changes.
+    /// While active, a repeating daily DeviceActivity schedule wakes the
+    /// TaskMonitor extension at midnight, which re-applies the shield if the
+    /// new day is in the pending list — no app launch required.
+    @objc func updateSchedule(_ call: CAPPluginCall) {
+        #if canImport(FamilyControls) && canImport(DeviceActivity)
+        if #available(iOS 16.0, *) {
+            let dates = call.getArray("dates", String.self) ?? []
+            let enabled = call.getBool("enabled") ?? false
+
+            let defaults = TaskLockShared.defaults
+            defaults?.set(dates, forKey: TaskLockShared.pendingDatesKey)
+            defaults?.set(enabled, forKey: TaskLockShared.enabledKey)
+
+            let center = DeviceActivityCenter()
+            let activity = DeviceActivityName("tasklock.daily")
+
+            let shouldMonitor = enabled
+                && !dates.isEmpty
+                && AuthorizationCenter.shared.authorizationStatus == .approved
+                && (loadSelection().map { selectionCount($0) > 0 } ?? false)
+
+            if shouldMonitor {
+                if !center.activities.contains(activity) {
+                    let schedule = DeviceActivitySchedule(
+                        intervalStart: DateComponents(hour: 0, minute: 0),
+                        intervalEnd: DateComponents(hour: 23, minute: 59),
+                        repeats: true
+                    )
+                    do {
+                        try center.startMonitoring(activity, during: schedule)
+                    } catch {
+                        call.reject("Could not schedule the midnight re-lock. (\(error.localizedDescription))")
+                        return
+                    }
+                }
+                call.resolve(["monitoring": true])
+            } else {
+                center.stopMonitoring([activity])
+                call.resolve(["monitoring": false])
+            }
+            return
+        }
+        #endif
+        call.resolve(["monitoring": false])
     }
 }
 

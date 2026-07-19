@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStore } from './hooks/useStore';
 import { useScreenTime } from './hooks/useScreenTime';
 import TasksView from './components/TasksView';
@@ -29,6 +29,22 @@ export default function App() {
     st.sync(!store.allLockingDone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.allLockingDone, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
+
+  // Tell the native layer which days (today or later) still have incomplete
+  // locking tasks, so the midnight DeviceActivity schedule can re-lock apps
+  // for a new day even if TaskLock is never opened.
+  const pendingLockDates = useMemo(
+    () => [...new Set(
+      store.tasks
+        .filter(t => t.isLocking && !t.completed && t.date >= store.today)
+        .map(t => t.date),
+    )].sort(),
+    [store.tasks, store.today],
+  );
+  useEffect(() => {
+    st.updateSchedule(pendingLockDates);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingLockDates.join(','), st.enabled, st.status.authorization, st.status.selectionCount]);
 
   // Unlock celebration, shown wherever the last locking task is completed.
   const [celebrated, setCelebrated] = useState(false);

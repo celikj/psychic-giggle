@@ -76,6 +76,20 @@ export function useScreenTime() {
     }
   }, [refresh]);
 
+  /**
+   * Keep the native midnight re-arm schedule in step with which upcoming days
+   * still have incomplete locking tasks, so apps re-lock for a new day even
+   * if TaskLock is never opened.
+   */
+  const updateSchedule = useCallback(async (dates: string[]) => {
+    if (!isNativeIOS) return;
+    try {
+      await ScreenTime.updateSchedule({ dates, enabled });
+    } catch {
+      /* older native build without the method — in-app sync still works */
+    }
+  }, [enabled]);
+
   /** Keep the OS shield in step with whether locking tasks are still pending. */
   const sync = useCallback(async (shouldBlock: boolean) => {
     if (!isNativeIOS || !enabled) return;
@@ -93,7 +107,7 @@ export function useScreenTime() {
     }
   }, [enabled, status.authorization, status.selectionCount, status.blocking, refresh]);
 
-  return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, refresh, isNativeIOS };
+  return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, updateSchedule, refresh, isNativeIOS };
 }
 
 export type ScreenTimeController = ReturnType<typeof useScreenTime>;
