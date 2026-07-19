@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, Trash2, Flame, X, Lock, Clock, ScanBarcode } from 'lucide-react';
+import { Plus, Flame, X, Lock, Clock, ScanBarcode } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
 import BarcodeScanner from './BarcodeScanner';
+import ConfirmDeleteButton from './ConfirmDeleteButton';
 
 interface Props { store: Store }
 
@@ -17,9 +18,10 @@ function formatTime(t: string): string {
 }
 
 export default function DailiesView({ store }: Props) {
-  const { dailies, today, toggleDaily, addDaily, deleteDaily, getDailyStreak, getLast7Days } = store;
+  const { dailies, today, toggleDaily, addDaily, editDaily, deleteDaily, getDailyStreak, getLast7Days } = store;
 
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [targetDays, setTargetDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
@@ -39,6 +41,7 @@ export default function DailiesView({ store }: Props) {
   const pct = dueToday.length === 0 ? 0 : Math.round((doneCount / dueToday.length) * 100);
 
   const resetForm = () => {
+    setEditingId(null);
     setTitle('');
     setEmoji('🎯');
     setTargetDays([0, 1, 2, 3, 4, 5, 6]);
@@ -49,16 +52,33 @@ export default function DailiesView({ store }: Props) {
     setShowAdd(false);
   };
 
-  const handleAdd = () => {
+  const startEdit = (daily: Daily) => {
+    setEditingId(daily.id);
+    setTitle(daily.title);
+    setEmoji(daily.emoji);
+    setTargetDays(daily.targetDays);
+    setUseTime(!!daily.time);
+    setTime(daily.time ?? '21:00');
+    setIsLocking(daily.isLocking);
+    setBarcode(daily.barcode ?? null);
+    setShowAdd(true);
+  };
+
+  const handleSubmit = () => {
     if (!title.trim() || targetDays.length === 0) return;
-    addDaily({
+    const payload = {
       title: title.trim(),
       emoji,
       targetDays: [...targetDays].sort(),
       time: useTime ? time : undefined,
       isLocking,
       barcode: barcode ?? undefined,
-    });
+    };
+    if (editingId) {
+      editDaily(editingId, payload);
+    } else {
+      addDaily(payload);
+    }
     resetForm();
   };
 
@@ -113,7 +133,7 @@ export default function DailiesView({ store }: Props) {
             {daily.emoji}
           </div>
 
-          <div className="flex-1 min-w-0">
+          <button onClick={() => startEdit(daily)} aria-label={`Edit daily "${daily.title}"`} className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-2">
               <span className={`text-sm font-semibold truncate ${done ? 'text-white/40 line-through' : 'text-white'}`}>
                 {daily.title}
@@ -142,15 +162,13 @@ export default function DailiesView({ store }: Props) {
                 </span>
               )}
             </div>
-          </div>
-
-          <button
-            onClick={() => deleteDaily(daily.id)}
-            aria-label={`Delete daily "${daily.title}"`}
-            className="p-1.5 rounded-xl hover:bg-white/10 transition-colors flex-shrink-0"
-          >
-            <Trash2 className="w-4 h-4 text-white/15 hover:text-red-400 transition-colors" />
           </button>
+
+          <ConfirmDeleteButton
+            label={`Delete daily "${daily.title}"`}
+            warnLocking={due && daily.isLocking && !done}
+            onConfirm={() => deleteDaily(daily.id)}
+          />
         </div>
 
         {/* Last 7 days */}
@@ -247,7 +265,7 @@ export default function DailiesView({ store }: Props) {
         {showAdd && (
           <div className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-4 animate-slide-up">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-white">New Daily</span>
+              <span className="text-sm font-semibold text-white">{editingId ? 'Edit Daily' : 'New Daily'}</span>
               <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
                 <X className="w-4 h-4 text-white/30" />
               </button>
@@ -261,7 +279,7 @@ export default function DailiesView({ store }: Props) {
                 type="text"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                 placeholder="Daily routine name..."
                 className="flex-1 text-white placeholder-white/25 text-sm font-medium outline-none px-2 bg-white/5 rounded-xl border border-white/10"
               />
@@ -370,11 +388,11 @@ export default function DailiesView({ store }: Props) {
                 Cancel
               </button>
               <button
-                onClick={handleAdd}
+                onClick={handleSubmit}
                 disabled={!title.trim() || targetDays.length === 0}
                 className="flex-1 py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
               >
-                Add Daily
+                {editingId ? 'Save Changes' : 'Add Daily'}
               </button>
             </div>
           </div>

@@ -101,6 +101,10 @@ export function useStore() {
     ]);
   }, [selectedDate, setTasks]);
 
+  const editTask = useCallback((id: string, updates: { title: string; priority: Priority; isLocking: boolean }) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, ...updates } : t));
+  }, [setTasks]);
+
   const toggleTask = useCallback((id: string) => {
     setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, completed: !t.completed } : t));
   }, [setTasks]);
@@ -127,6 +131,10 @@ export function useStore() {
     ]);
   }, [setHabits]);
 
+  const editHabit = useCallback((id: string, updates: { title: string; emoji: string; color: string; targetDays: number[] }) => {
+    setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => h.id === id ? { ...h, ...updates } : h));
+  }, [setHabits]);
+
   const deleteHabit = useCallback((id: string) => {
     setHabits(prev => (Array.isArray(prev) ? prev : []).filter(h => h.id !== id));
   }, [setHabits]);
@@ -148,6 +156,10 @@ export function useStore() {
       };
     }));
   }, [today, setDailies]);
+
+  const editDaily = useCallback((id: string, updates: Omit<Daily, 'id' | 'completedDates'>) => {
+    setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => d.id === id ? { ...d, ...updates } : d));
+  }, [setDailies]);
 
   const deleteDaily = useCallback((id: string) => {
     setDailies(prev => (Array.isArray(prev) ? prev : []).filter(d => d.id !== id));
@@ -236,12 +248,15 @@ export function useStore() {
     getCompletedDates,
     getPendingLockDates,
     addTask,
+    editTask,
     toggleTask,
     deleteTask,
     toggleHabit,
     addHabit,
+    editHabit,
     deleteHabit,
     addDaily,
+    editDaily,
     toggleDaily,
     deleteDaily,
     getDailyStreak,

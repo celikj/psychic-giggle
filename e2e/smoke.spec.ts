@@ -93,6 +93,37 @@ test.describe('dailies', () => {
   });
 });
 
+test.describe('editing', () => {
+  test('a to-do can be edited in place, and deleting a locking one warns first', async ({ page }) => {
+    await skipOnboarding(page);
+
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Original title');
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+
+    await page.getByRole('button', { name: 'Edit "Original title"' }).click();
+    await expect(page.getByPlaceholder('What needs to be done?')).toHaveValue('Original title');
+    await page.getByPlaceholder('What needs to be done?').fill('Edited title');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(page.getByText('Edited title')).toBeVisible();
+    await expect(page.getByText('Lock', { exact: true })).toBeVisible();
+
+    // Cancelling the confirm dialog must not delete anything.
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.getByRole('button', { name: 'Delete "Edited title"' }).click();
+    await expect(page.getByText('Edited title')).toBeVisible();
+
+    // Accepting it does, after warning that it's currently locking apps.
+    page.once('dialog', dialog => {
+      expect(dialog.message()).toContain('locking your apps');
+      dialog.accept();
+    });
+    await page.getByRole('button', { name: 'Delete "Edited title"' }).click();
+    await expect(page.getByText('Edited title')).not.toBeVisible();
+  });
+});
+
 test('data survives a reload', async ({ page }) => {
   await skipOnboarding(page);
   await page.getByRole('button', { name: 'Add Task' }).first().click();
