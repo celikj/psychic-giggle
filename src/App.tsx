@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStore } from './hooks/useStore';
 import { useScreenTime } from './hooks/useScreenTime';
+import { useNotifications } from './hooks/useNotifications';
 import { usePersisted } from './hooks/usePersisted';
 import TasksView from './components/TasksView';
 import DailiesView from './components/DailiesView';
@@ -15,6 +16,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('tasks');
   const store = useStore();
   const st = useScreenTime();
+  const notif = useNotifications();
 
   const [onboarded, setOnboarded, onboardedReady] = usePersisted('tl_onboarded', false);
   const [showIntro, setShowIntro] = useState(false);
@@ -49,6 +51,13 @@ export default function App() {
     st.updateSchedule(pendingLockDates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingLockDates.join(','), st.enabled, st.status.authorization, st.status.selectionCount]);
+
+  // Reminders: a heads-up before each timed locking daily starts gating, and
+  // a one-shot nudge tonight if something is still locking apps by evening.
+  useEffect(() => {
+    notif.resync(store.dailies, !store.allLockingDone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.dailies, store.allLockingDone, notif.enabled, notif.permission]);
 
   // Unlock celebration, shown wherever the last locking item is completed.
   const [celebrated, setCelebrated] = useState(false);
