@@ -70,6 +70,7 @@ export default function TasksView({ store }: Props) {
   });
 
   const completedDates = getCompletedDates();
+  const taskDates = new Set(store.tasks.map(t => t.date));
 
   const formatHeaderDate = () => {
     if (selectedDate === today) return 'Today';
@@ -123,6 +124,7 @@ export default function TasksView({ store }: Props) {
         onSelectDate={setSelectedDate}
         today={today}
         completedDates={completedDates}
+        taskDates={taskDates}
       />
 
       {/* Task list */}
