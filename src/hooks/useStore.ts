@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Task, Habit, Daily, Priority } from '../types';
 import { toLocalDateStr, localToday } from '../lib/date';
+import { usePersisted } from './usePersisted';
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number);
@@ -16,31 +17,6 @@ function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function useLocalStorage<T>(key: string, initialValue: T): [T, (v: T | ((p: T) => T)) => void] {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      if (item === null) return initialValue;
-      const parsed = JSON.parse(item) as T;
-      // Guard against corrupted storage: an array slot must hold an array.
-      if (Array.isArray(initialValue) && !Array.isArray(parsed)) return initialValue;
-      return parsed;
-    } catch {
-      return initialValue;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      /* storage full or unavailable — app still works in memory */
-    }
-  }, [key, value]);
-
-  return [value, setValue];
 }
 
 export function useStore() {
@@ -69,9 +45,11 @@ export function useStore() {
     };
   }, []);
 
-  const [tasks, setTasks] = useLocalStorage<Task[]>('tl_tasks', []);
-  const [habits, setHabits] = useLocalStorage<Habit[]>('tl_habits', []);
-  const [dailies, setDailies] = useLocalStorage<Daily[]>('tl_dailies', []);
+  const [tasks, setTasks, tasksReady] = usePersisted<Task[]>('tl_tasks', []);
+  const [habits, setHabits, habitsReady] = usePersisted<Habit[]>('tl_habits', []);
+  const [dailies, setDailies, dailiesReady] = usePersisted<Daily[]>('tl_dailies', []);
+  /** True once tasks/habits/dailies have loaded from disk — gate rendering on this to avoid a flash of the empty default before real data arrives. */
+  const ready = tasksReady && habitsReady && dailiesReady;
 
   const [selectedDate, setSelectedDate] = useState(today);
 
@@ -239,6 +217,7 @@ export function useStore() {
   }, []);
 
   return {
+    ready,
     tasks,
     habits,
     dailies,

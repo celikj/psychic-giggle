@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStore } from './hooks/useStore';
 import { useScreenTime } from './hooks/useScreenTime';
+import { usePersisted } from './hooks/usePersisted';
 import TasksView from './components/TasksView';
 import DailiesView from './components/DailiesView';
 import HabitsView from './components/HabitsView';
 import BlockerView from './components/BlockerView';
 import BottomNav from './components/BottomNav';
-import Onboarding, { ONBOARDED_KEY } from './components/Onboarding';
+import Onboarding from './components/Onboarding';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker';
 
@@ -15,13 +16,18 @@ export default function App() {
   const store = useStore();
   const st = useScreenTime();
 
-  const [showIntro, setShowIntro] = useState(() => {
-    try {
-      return localStorage.getItem(ONBOARDED_KEY) !== '1';
-    } catch {
-      return false;
-    }
-  });
+  const [onboarded, setOnboarded, onboardedReady] = usePersisted('tl_onboarded', false);
+  const [showIntro, setShowIntro] = useState(false);
+  // Decide once, the moment the real value loads — never flash the intro
+  // for a returning user, or skip it for a new one, based on the default.
+  useEffect(() => {
+    if (onboardedReady) setShowIntro(!onboarded);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardedReady]);
+
+  // Splash while the persisted stores hydrate, so nobody sees an empty
+  // "no tasks yet" state (or the wrong onboarding decision) for a frame.
+  const ready = store.ready && onboardedReady;
 
   // Keep the OS shield in step with the locking tasks from anywhere in the
   // app — completing the last task on the Tasks tab must unlock immediately,
@@ -59,16 +65,16 @@ export default function App() {
   }, [store.allLockingDone, hadLocking]);
 
   const finishIntro = () => {
-    try {
-      localStorage.setItem(ONBOARDED_KEY, '1');
-    } catch {
-      /* private mode — just close it for this session */
-    }
+    setOnboarded(true);
     setShowIntro(false);
   };
 
+  if (!ready) {
+    return <div className="min-h-screen max-w-md mx-auto" style={{ background: '#0a0a0f' }} />;
+  }
+
   return (
-    <div className="min-h-screen max-w-md mx-auto relative overflow-hidden" style={{ background: '#0a0a0f' }}>
+    <div className="min-h-screen max-w-md mx-auto relative overflow-hidden animate-slide-up" style={{ background: '#0a0a0f' }}>
       {showIntro && <Onboarding isNativeIOS={st.isNativeIOS} onDone={finishIntro} />}
 
       {celebrated && (

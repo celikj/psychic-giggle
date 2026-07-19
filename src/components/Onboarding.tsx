@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { Lock, CheckSquare, CalendarClock, ScanBarcode, Flame, Shield, ChevronRight } from 'lucide-react';
 
-export const ONBOARDED_KEY = 'tl_onboarded';
-
 interface Props {
   isNativeIOS: boolean;
   onDone: () => void;

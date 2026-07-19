@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import ScreenTime, { isNativeIOS, type ScreenTimeStatus } from '../native/screenTime';
-
-const ENABLED_KEY = 'tl_screentime_enabled';
+import { usePersisted } from './usePersisted';
 
 const DEFAULT_STATUS: ScreenTimeStatus = {
   supported: false,
@@ -17,7 +16,7 @@ const DEFAULT_STATUS: ScreenTimeStatus = {
  */
 export function useScreenTime() {
   const [status, setStatus] = useState<ScreenTimeStatus>(DEFAULT_STATUS);
-  const [enabled, setEnabledState] = useState<boolean>(() => localStorage.getItem(ENABLED_KEY) === '1');
+  const [enabled, setEnabledPersisted] = usePersisted<boolean>('tl_screentime_enabled', false);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -30,14 +29,13 @@ export function useScreenTime() {
   }, []);
 
   const setEnabled = useCallback(async (value: boolean) => {
-    localStorage.setItem(ENABLED_KEY, value ? '1' : '0');
-    setEnabledState(value);
+    setEnabledPersisted(value);
     // Turning the feature off should immediately release any active shield.
     if (!value && isNativeIOS) {
       try { await ScreenTime.stopBlocking(); } catch { /* ignore */ }
       await refresh();
     }
-  }, [refresh]);
+  }, [refresh, setEnabledPersisted]);
 
   useEffect(() => {
     refresh();
