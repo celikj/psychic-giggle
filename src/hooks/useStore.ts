@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Task, Habit, Daily, Priority } from '../types';
-import { toLocalDateStr, localToday } from '../lib/date';
+import { localToday } from '../lib/date';
 import { usePersisted } from './usePersisted';
-
-function timeToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function minutesNow(): number {
-  const n = new Date();
-  return n.getHours() * 60 + n.getMinutes();
-}
+import {
+  minutesOfDay,
+  computeLockState,
+  computeCompletedDates,
+  computeDailyStreak,
+  computeHabitStreak,
+  computePendingLockDates,
+  computePendingTimedLockDates,
+  computeLast7Days,
+} from '../lib/storeLogic';
 
 function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -21,7 +21,7 @@ function uid(): string {
 
 export function useStore() {
   const [today, setToday] = useState(localToday);
-  const [nowMinutes, setNowMinutes] = useState(minutesNow);
+  const [nowMinutes, setNowMinutes] = useState(() => minutesOfDay(new Date()));
 
   // Roll "today" over at midnight and tick the clock while the app stays
   // open, re-checking on foreground. This is what re-arms the blocker for a
@@ -33,7 +33,7 @@ export function useStore() {
         return now === prev ? prev : now;
       });
       setNowMinutes(prev => {
-        const now = minutesNow();
+        const now = minutesOfDay(new Date());
         return now === prev ? prev : now;
       });
     };
@@ -53,46 +53,23 @@ export function useStore() {
 
   const [selectedDate, setSelectedDate] = useState(today);
 
-  const todayWeekday = new Date(today + 'T00:00:00').getDay();
-  const dueDailies = dailies.filter(d => d.targetDays.includes(todayWeekday));
   const isDailyDoneToday = useCallback(
     (d: Daily) => d.completedDates.includes(today),
     [today],
   );
 
-  // A locking daily "gates" (blocks apps) once it's due: immediately for
-  // all-day dailies, from its start time for timed ones — until checked off.
-  const gatingDailies = dueDailies.filter(
-    d => d.isLocking && !d.completedDates.includes(today) && (!d.time || nowMinutes >= timeToMinutes(d.time)),
-  );
-  const upcomingGates = dueDailies
-    .filter(d => d.isLocking && !d.completedDates.includes(today) && d.time && nowMinutes < timeToMinutes(d.time))
-    .sort((a, b) => timeToMinutes(a.time!) - timeToMinutes(b.time!));
-  const nextGate = upcomingGates.length > 0 ? upcomingGates[0] : null;
-
-  const lockingTasksToday = tasks.filter(t => t.date === today && t.isLocking);
-  const lockingLeft = lockingTasksToday.filter(t => !t.completed).length + gatingDailies.length;
-  const allLockingDone = lockingLeft === 0;
-  const hasLockingToday = lockingTasksToday.length > 0 || dueDailies.some(d => d.isLocking);
+  // "now" only needs to be precise to the minute here (nowMinutes already
+  // ticks independently), so today at nowMinutes is a faithful stand-in for
+  // computeLockState's reference Date.
+  const referenceNow = new Date();
+  referenceNow.setHours(Math.floor(nowMinutes / 60), nowMinutes % 60, 0, 0);
+  const lockState = computeLockState(tasks, dailies, today, referenceNow);
+  const { dueDailies, gatingDailies, nextGate, lockingLeft, allLockingDone, hasLockingToday } = lockState;
 
   const todayTasks = tasks.filter(t => t.date === selectedDate);
   const completedToday = todayTasks.filter(t => t.completed).length;
 
-  const getCompletedDates = useCallback((): Set<string> => {
-    const dateMap = new Map<string, { total: number; completed: number }>();
-    tasks.forEach(t => {
-      const existing = dateMap.get(t.date) ?? { total: 0, completed: 0 };
-      dateMap.set(t.date, {
-        total: existing.total + 1,
-        completed: existing.completed + (t.completed ? 1 : 0),
-      });
-    });
-    const result = new Set<string>();
-    dateMap.forEach((v, k) => {
-      if (v.total > 0 && v.completed === v.total) result.add(k);
-    });
-    return result;
-  }, [tasks]);
+  const getCompletedDates = useCallback((): Set<string> => computeCompletedDates(tasks), [tasks]);
 
   const addTask = useCallback((title: string, priority: Priority, isLocking: boolean) => {
     setTasks(prev => [
@@ -165,97 +142,21 @@ export function useStore() {
     setDailies(prev => (Array.isArray(prev) ? prev : []).filter(d => d.id !== id));
   }, [setDailies]);
 
-  /** Consecutive due-days completed; skips days the daily isn't scheduled. */
-  const getDailyStreak = useCallback((daily: Daily): number => {
-    let streak = 0;
-    const d = new Date();
-    const dueOn = (dt: Date) => daily.targetDays.includes(dt.getDay());
-    const doneOn = (dt: Date) => daily.completedDates.includes(toLocalDateStr(dt));
-    if (dueOn(d) && doneOn(d)) streak++; // today counts if done, never breaks
-    d.setDate(d.getDate() - 1);
-    for (let i = 0; i < 3650; i++) {
-      if (dueOn(d)) {
-        if (!doneOn(d)) break;
-        streak++;
-      }
-      d.setDate(d.getDate() - 1);
-    }
-    return streak;
-  }, []);
+  const getDailyStreak = useCallback((daily: Daily): number => computeDailyStreak(daily), []);
 
-  /**
-   * Dates (today onward) the native midnight re-lock should arm for: days
-   * with incomplete locking to-dos plus days an all-day locking daily is due.
-   * Timed dailies are handled separately by getPendingTimedLockDates, since
-   * they need to re-lock at their own start time, not at midnight.
-   */
-  const getPendingLockDates = useCallback((): string[] => {
-    const dates = new Set(
-      tasks.filter(t => t.isLocking && !t.completed && t.date >= today).map(t => t.date),
-    );
-    const allDayLocking = dailies.filter(d => d.isLocking && !d.time);
-    for (let i = 0; i < 14; i++) {
-      const dt = new Date();
-      dt.setDate(dt.getDate() + i);
-      const ds = toLocalDateStr(dt);
-      if (allDayLocking.some(d => d.targetDays.includes(dt.getDay()) && !d.completedDates.includes(ds))) {
-        dates.add(ds);
-      }
-    }
-    return [...dates].sort();
-  }, [tasks, dailies, today]);
+  const getPendingLockDates = useCallback(
+    (): string[] => computePendingLockDates(tasks, dailies, today),
+    [tasks, dailies, today],
+  );
 
-  /**
-   * For each distinct start time among timed locking dailies, the dates
-   * (today onward) it should re-arm for — i.e. at least one daily due at
-   * that time isn't completed yet. Keyed by "HH:MM" to match Daily.time, so
-   * the native layer can register one repeating schedule per time-of-day.
-   */
-  const getPendingTimedLockDates = useCallback((): Record<string, string[]> => {
-    const byTime = new Map<string, Daily[]>();
-    for (const d of dailies.filter(d => d.isLocking && d.time)) {
-      const list = byTime.get(d.time!) ?? [];
-      list.push(d);
-      byTime.set(d.time!, list);
-    }
-    const result: Record<string, string[]> = {};
-    byTime.forEach((ds, time) => {
-      const dates: string[] = [];
-      for (let i = 0; i < 14; i++) {
-        const dt = new Date();
-        dt.setDate(dt.getDate() + i);
-        const dateStr = toLocalDateStr(dt);
-        if (ds.some(d => d.targetDays.includes(dt.getDay()) && !d.completedDates.includes(dateStr))) {
-          dates.push(dateStr);
-        }
-      }
-      if (dates.length > 0) result[time] = dates;
-    });
-    return result;
-  }, [dailies]);
+  const getPendingTimedLockDates = useCallback(
+    (): Record<string, string[]> => computePendingTimedLockDates(dailies),
+    [dailies],
+  );
 
-  const getStreak = useCallback((habit: Habit): number => {
-    let streak = 0;
-    const d = new Date();
-    // A streak isn't broken just because today isn't checked off yet.
-    if (!habit.completedDates.includes(toLocalDateStr(d))) d.setDate(d.getDate() - 1);
-    while (streak < 3650) {
-      if (!habit.completedDates.includes(toLocalDateStr(d))) break;
-      streak++;
-      d.setDate(d.getDate() - 1);
-    }
-    return streak;
-  }, []);
+  const getStreak = useCallback((habit: Habit): number => computeHabitStreak(habit), []);
 
-  const getLast7Days = useCallback((): string[] => {
-    const days: string[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push(toLocalDateStr(d));
-    }
-    return days;
-  }, []);
+  const getLast7Days = useCallback((): string[] => computeLast7Days(), []);
 
   return {
     ready,

@@ -1,9 +1,10 @@
 name: CI
 
-# Runs on every push and pull request: typecheck, build, and the Playwright
-# e2e suite on the web bundle, plus an unsigned iOS compile check so a
-# broken Swift build (plugin, ShieldConfig, or TaskMonitor extension) shows
-# up on the PR instead of on someone's phone after a TestFlight upload.
+# Runs on every push and pull request: typecheck, Vitest unit tests over the
+# pure store logic, a build, and the Playwright e2e suite on the web bundle,
+# plus an unsigned iOS compile check so a broken Swift build (plugin,
+# ShieldConfig, or TaskMonitor extension) shows up on the PR instead of on
+# someone's phone after a TestFlight upload.
 
 on:
   push:
@@ -12,7 +13,7 @@ on:
 
 jobs:
   web:
-    name: Typecheck, build & e2e
+    name: Typecheck, unit tests, build & e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +28,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
 
       - name: Build
         run: npm run build

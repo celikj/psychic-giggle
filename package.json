@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "build:single": "cross-env SINGLEFILE=1 vite build",
     "embed": "node launcher/embed.cjs",
@@ -46,6 +47,7 @@
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.4",
     "vite": "^5.4.2",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.10"
   }
 }
