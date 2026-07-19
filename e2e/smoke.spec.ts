@@ -70,6 +70,18 @@ test.describe('dailies', () => {
     await expect(page.getByText('Apps Unlocked!')).toBeVisible();
   });
 
+  test('a quick-start template adds a preset daily in one tap', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Dailies' }).click();
+    await expect(page.getByText('Quick start')).toBeVisible();
+
+    await page.getByRole('button', { name: /Brush teeth/ }).click();
+    await expect(page.getByText('Brush teeth')).toBeVisible();
+    await expect(page.getByText('Locks from 9:00 PM')).toBeVisible();
+    // Once something exists, the empty-state template picker goes away.
+    await expect(page.getByText('Quick start')).not.toBeVisible();
+  });
+
   test('a barcode daily only checks off with the registered code', async ({ page }) => {
     await skipOnboarding(page);
     await page.getByRole('button', { name: 'Dailies' }).click();
@@ -92,6 +104,16 @@ test.describe('dailies', () => {
     await page.getByRole('button', { name: 'OK' }).click();
     await expect(page.getByRole('button', { name: 'Uncheck "Brush teeth" for today' })).toBeVisible();
   });
+});
+
+test('a quick-start template adds a preset habit in one tap', async ({ page }) => {
+  await skipOnboarding(page);
+  await page.getByRole('button', { name: 'Habits' }).click();
+  await expect(page.getByText('Quick start')).toBeVisible();
+
+  await page.getByRole('button', { name: /Meditate/ }).click();
+  await expect(page.getByText('Meditate')).toBeVisible();
+  await expect(page.getByText('Quick start')).not.toBeVisible();
 });
 
 test.describe('editing', () => {

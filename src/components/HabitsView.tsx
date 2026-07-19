@@ -4,6 +4,7 @@ import type { Store } from '../hooks/useStore';
 import type { Habit } from '../types';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import { hapticTick } from '../lib/haptics';
+import { HABIT_TEMPLATES } from '../lib/templates';
 
 interface Props { store: Store }
 
@@ -97,10 +98,36 @@ export default function HabitsView({ store }: Props) {
       {/* Habit cards */}
       <div className="px-4 space-y-2">
         {habits.length === 0 && !showAdd && (
-          <div className="text-center py-14 animate-slide-up">
-            <div className="text-5xl mb-3">🌱</div>
-            <p className="text-white/30 text-sm font-medium">No habits yet</p>
-            <p className="text-white/20 text-xs mt-1">Build consistent routines</p>
+          <div className="animate-slide-up">
+            <div className="text-center py-8">
+              <div className="text-5xl mb-3">🌱</div>
+              <p className="text-white/30 text-sm font-medium">No habits yet</p>
+              <p className="text-white/20 text-xs mt-1">Build consistent routines</p>
+            </div>
+            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-2 px-1">
+              Quick start
+            </p>
+            <div className="space-y-2">
+              {HABIT_TEMPLATES.map(t => (
+                <button
+                  key={t.title}
+                  onClick={() => addHabit(t.title, t.emoji, t.color, t.targetDays)}
+                  className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                    style={{ backgroundColor: t.color + '22', border: `1.5px solid ${t.color}44` }}
+                  >
+                    {t.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">{t.title}</p>
+                    <p className="text-xs text-white/40 mt-0.5">{t.subtitle}</p>
+                  </div>
+                  <Plus className="w-4 h-4 text-white/30 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
