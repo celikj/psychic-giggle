@@ -131,15 +131,8 @@ export default function BlockerView({ store, st }: Props) {
               {st.busy && <Loader2 className="w-4 h-4 text-white/40 animate-spin" />}
             </div>
 
-            {/* Not supported */}
-            {!st.status.supported && (
-              <p className="mt-4 text-xs text-white/40 leading-relaxed">
-                App blocking needs iOS&nbsp;16 or later. Update your iPhone to use it.
-              </p>
-            )}
-
             {/* Step 1 — permission */}
-            {st.status.supported && !approved && (
+            {!approved && (
               <>
                 <p className="mt-4 text-xs text-white/40 leading-relaxed">
                   Grant Screen Time access, then pick the apps you want locked while tasks are pending.
@@ -157,7 +150,7 @@ export default function BlockerView({ store, st }: Props) {
             )}
 
             {/* Step 2 — pick apps via Apple's system picker */}
-            {st.status.supported && approved && (
+            {approved && (
               <div className="mt-4 space-y-3">
                 <button
                   onClick={st.chooseApps}

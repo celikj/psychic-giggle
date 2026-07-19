@@ -28,20 +28,17 @@ enum TaskLockShared {
     }
 
     #if canImport(FamilyControls)
-    @available(iOS 16.0, *)
     static func loadSelection() -> FamilyActivitySelection? {
         guard let data = defaults?.data(forKey: selectionKey) else { return nil }
         return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
     }
 
-    @available(iOS 16.0, *)
     static func saveSelection(_ selection: FamilyActivitySelection) {
         if let data = try? JSONEncoder().encode(selection) {
             defaults?.set(data, forKey: selectionKey)
         }
     }
 
-    @available(iOS 16.0, *)
     static func applyShield(_ selection: FamilyActivitySelection, to store: ManagedSettingsStore) {
         store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
         store.shield.applicationCategories = selection.categoryTokens.isEmpty

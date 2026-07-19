@@ -22,7 +22,7 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
         guard pending.contains(TaskLockShared.localDateString()) else { return }
 
         #if canImport(FamilyControls)
-        if #available(iOS 16.0, *), let selection = TaskLockShared.loadSelection() {
+        if let selection = TaskLockShared.loadSelection() {
             TaskLockShared.applyShield(selection, to: store)
         }
         #endif

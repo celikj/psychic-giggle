@@ -29,7 +29,7 @@ Download the binary for your platform from [Releases](../../releases):
 It starts a tiny local server and opens TaskLock in your browser. On macOS/Linux run `chmod +x tasklock-*` first.
 
 ### Option 3 — iPhone / iPad (native iOS app)
-TaskLock ships as a real native iOS app via [Capacitor](https://capacitorjs.com).
+TaskLock ships as a real native iOS app via [Capacitor](https://capacitorjs.com). **Requires iOS 16 or later** — the app targets the iOS versions that support Family Controls app blocking, so the blocker works on every device that can install it.
 
 **Without a Mac** — download `TaskLock-unsigned.ipa` from [Releases](../../releases) and install it with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) using a free Apple ID (works from Windows too). Free-Apple-ID sideloads expire after 7 days and need a refresh.
 

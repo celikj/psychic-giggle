@@ -16,6 +16,8 @@ import DeviceActivity
 /// Lets the web layer request authorization, pick which apps/categories to
 /// block via the system picker, and shield/unshield them. TaskLock uses this
 /// to keep distracting apps locked until the day's locking tasks are done.
+/// The app targets iOS 16+, the floor for individual Family Controls
+/// authorization, so no runtime availability checks are needed.
 @objc(ScreenTimePlugin)
 public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "ScreenTimePlugin"
@@ -35,7 +37,6 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
     #if canImport(FamilyControls)
     private let managedStore = ManagedSettingsStore()
 
-    @available(iOS 16.0, *)
     private func loadSelection() -> FamilyActivitySelection? {
         if let selection = TaskLockShared.loadSelection() { return selection }
         // Migrate a selection saved before the App Group existed.
@@ -48,19 +49,8 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         return nil
     }
 
-    @available(iOS 16.0, *)
-    private func saveSelection(_ selection: FamilyActivitySelection) {
-        TaskLockShared.saveSelection(selection)
-    }
-
-    @available(iOS 16.0, *)
     private func selectionCount(_ selection: FamilyActivitySelection) -> Int {
         selection.applicationTokens.count + selection.categoryTokens.count + selection.webDomainTokens.count
-    }
-
-    @available(iOS 16.0, *)
-    private func applyShield(_ selection: FamilyActivitySelection) {
-        TaskLockShared.applyShield(selection, to: managedStore)
     }
 
     private func clearShield() {
@@ -76,101 +66,92 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func isSupported(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
-        if #available(iOS 16.0, *) {
-            call.resolve(["supported": true])
-            return
-        }
-        #endif
+        call.resolve(["supported": true])
+        #else
         call.resolve(["supported": false])
+        #endif
     }
 
     @objc func getStatus(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
-        if #available(iOS 16.0, *) {
-            let status: String
-            switch AuthorizationCenter.shared.authorizationStatus {
-            case .approved: status = "approved"
-            case .denied: status = "denied"
-            default: status = "notDetermined"
-            }
-            let selection = loadSelection()
-            call.resolve([
-                "supported": true,
-                "authorization": status,
-                "selectionCount": selection.map { selectionCount($0) } ?? 0,
-                "blocking": isShielded(),
-            ])
-            return
+        let status: String
+        switch AuthorizationCenter.shared.authorizationStatus {
+        case .approved: status = "approved"
+        case .denied: status = "denied"
+        default: status = "notDetermined"
         }
-        #endif
+        let selection = loadSelection()
+        call.resolve([
+            "supported": true,
+            "authorization": status,
+            "selectionCount": selection.map { selectionCount($0) } ?? 0,
+            "blocking": isShielded(),
+        ])
+        #else
         call.resolve(["supported": false, "authorization": "unavailable", "selectionCount": 0, "blocking": false])
+        #endif
     }
 
     @objc func requestAuthorization(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
-        if #available(iOS 16.0, *) {
-            Task {
-                do {
-                    try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
-                    call.resolve(["authorization": "approved"])
-                } catch {
-                    call.reject("Screen Time permission was not granted. Enable it in Settings › Screen Time. (\(error.localizedDescription))")
-                }
+        Task {
+            do {
+                try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+                call.resolve(["authorization": "approved"])
+            } catch {
+                call.reject("Screen Time permission was not granted. Enable it in Settings › Screen Time. (\(error.localizedDescription))")
             }
-            return
         }
+        #else
+        call.reject("Screen Time is unavailable on this platform.")
         #endif
-        call.reject("Screen Time blocking requires iOS 16 or later.")
     }
 
     @objc func selectApps(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
-        if #available(iOS 16.0, *) {
-            DispatchQueue.main.async {
-                let initial = self.loadSelection() ?? FamilyActivitySelection()
-                let picker = FamilyActivityPickerHost(selection: initial) { [weak self] result in
-                    self?.bridge?.viewController?.dismiss(animated: true)
-                    guard let self = self else { return }
-                    if let result = result {
-                        self.saveSelection(result)
-                        if self.isShielded() { self.applyShield(result) } // keep an active shield in sync
-                        call.resolve(["count": self.selectionCount(result)])
-                    } else {
-                        call.resolve(["count": self.loadSelection().map { self.selectionCount($0) } ?? 0])
+        DispatchQueue.main.async {
+            let initial = self.loadSelection() ?? FamilyActivitySelection()
+            let picker = FamilyActivityPickerHost(selection: initial) { [weak self] result in
+                self?.bridge?.viewController?.dismiss(animated: true)
+                guard let self = self else { return }
+                if let result = result {
+                    TaskLockShared.saveSelection(result)
+                    if self.isShielded() {
+                        TaskLockShared.applyShield(result, to: self.managedStore) // keep an active shield in sync
                     }
+                    call.resolve(["count": self.selectionCount(result)])
+                } else {
+                    call.resolve(["count": self.loadSelection().map { self.selectionCount($0) } ?? 0])
                 }
-                let host = UIHostingController(rootView: picker)
-                host.modalPresentationStyle = .formSheet
-                self.bridge?.viewController?.present(host, animated: true)
             }
-            return
+            let host = UIHostingController(rootView: picker)
+            host.modalPresentationStyle = .formSheet
+            self.bridge?.viewController?.present(host, animated: true)
         }
+        #else
+        call.reject("Screen Time is unavailable on this platform.")
         #endif
-        call.reject("Screen Time blocking requires iOS 16 or later.")
     }
 
     @objc func startBlocking(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
-        if #available(iOS 16.0, *) {
-            guard let selection = loadSelection(), selectionCount(selection) > 0 else {
-                call.reject("Pick at least one app to block first.")
-                return
-            }
-            applyShield(selection)
-            call.resolve(["blocking": true])
+        guard let selection = loadSelection(), selectionCount(selection) > 0 else {
+            call.reject("Pick at least one app to block first.")
             return
         }
+        TaskLockShared.applyShield(selection, to: managedStore)
+        call.resolve(["blocking": true])
+        #else
+        call.reject("Screen Time is unavailable on this platform.")
         #endif
-        call.reject("Screen Time blocking requires iOS 16 or later.")
     }
 
     @objc func stopBlocking(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
         clearShield()
         call.resolve(["blocking": false])
-        return
         #else
-        call.reject("Screen Time blocking requires iOS 16 or later.")
+        call.reject("Screen Time is unavailable on this platform.")
         #endif
     }
 
@@ -181,52 +162,49 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
     /// new day is in the pending list — no app launch required.
     @objc func updateSchedule(_ call: CAPPluginCall) {
         #if canImport(FamilyControls) && canImport(DeviceActivity)
-        if #available(iOS 16.0, *) {
-            let dates = call.getArray("dates", String.self) ?? []
-            let enabled = call.getBool("enabled") ?? false
+        let dates = call.getArray("dates", String.self) ?? []
+        let enabled = call.getBool("enabled") ?? false
 
-            let defaults = TaskLockShared.defaults
-            defaults?.set(dates, forKey: TaskLockShared.pendingDatesKey)
-            defaults?.set(enabled, forKey: TaskLockShared.enabledKey)
+        let defaults = TaskLockShared.defaults
+        defaults?.set(dates, forKey: TaskLockShared.pendingDatesKey)
+        defaults?.set(enabled, forKey: TaskLockShared.enabledKey)
 
-            let center = DeviceActivityCenter()
-            let activity = DeviceActivityName("tasklock.daily")
+        let center = DeviceActivityCenter()
+        let activity = DeviceActivityName("tasklock.daily")
 
-            let shouldMonitor = enabled
-                && !dates.isEmpty
-                && AuthorizationCenter.shared.authorizationStatus == .approved
-                && (loadSelection().map { selectionCount($0) > 0 } ?? false)
+        let shouldMonitor = enabled
+            && !dates.isEmpty
+            && AuthorizationCenter.shared.authorizationStatus == .approved
+            && (loadSelection().map { selectionCount($0) > 0 } ?? false)
 
-            if shouldMonitor {
-                if !center.activities.contains(activity) {
-                    let schedule = DeviceActivitySchedule(
-                        intervalStart: DateComponents(hour: 0, minute: 0),
-                        intervalEnd: DateComponents(hour: 23, minute: 59),
-                        repeats: true
-                    )
-                    do {
-                        try center.startMonitoring(activity, during: schedule)
-                    } catch {
-                        call.reject("Could not schedule the midnight re-lock. (\(error.localizedDescription))")
-                        return
-                    }
+        if shouldMonitor {
+            if !center.activities.contains(activity) {
+                let schedule = DeviceActivitySchedule(
+                    intervalStart: DateComponents(hour: 0, minute: 0),
+                    intervalEnd: DateComponents(hour: 23, minute: 59),
+                    repeats: true
+                )
+                do {
+                    try center.startMonitoring(activity, during: schedule)
+                } catch {
+                    call.reject("Could not schedule the midnight re-lock. (\(error.localizedDescription))")
+                    return
                 }
-                call.resolve(["monitoring": true])
-            } else {
-                center.stopMonitoring([activity])
-                call.resolve(["monitoring": false])
             }
-            return
+            call.resolve(["monitoring": true])
+        } else {
+            center.stopMonitoring([activity])
+            call.resolve(["monitoring": false])
         }
-        #endif
+        #else
         call.resolve(["monitoring": false])
+        #endif
     }
 }
 
 #if canImport(FamilyControls)
 /// Small SwiftUI wrapper that presents the system Family Activity picker and
 /// reports the chosen selection (or nil if cancelled) back through a callback.
-@available(iOS 16.0, *)
 private struct FamilyActivityPickerHost: View {
     @State private var selection: FamilyActivitySelection
     @State private var isPresented = true
