@@ -1,48 +1,59 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Task, Habit, BlockedApp, Priority } from '../types';
+import type { Task, Habit, Priority } from '../types';
+import { toLocalDateStr, localToday } from '../lib/date';
+
+function uid(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 function useLocalStorage<T>(key: string, initialValue: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item ? (JSON.parse(item) as T) : initialValue;
+      if (item === null) return initialValue;
+      const parsed = JSON.parse(item) as T;
+      // Guard against corrupted storage: an array slot must hold an array.
+      if (Array.isArray(initialValue) && !Array.isArray(parsed)) return initialValue;
+      return parsed;
     } catch {
       return initialValue;
     }
   });
 
   useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* storage full or unavailable — app still works in memory */
+    }
   }, [key, value]);
 
   return [value, setValue];
 }
 
 export function useStore() {
-  const today = new Date().toISOString().split('T')[0];
+  const [today, setToday] = useState(localToday);
 
-  const [tasks, setTasks] = useLocalStorage<Task[]>('tl_tasks', [
-    { id: '1', title: 'Morning workout', completed: false, date: today, priority: 'high', isLocking: true },
-    { id: '2', title: 'Read for 30 minutes', completed: false, date: today, priority: 'medium', isLocking: false },
-    { id: '3', title: 'Review project proposal', completed: false, date: today, priority: 'high', isLocking: true },
-    { id: '4', title: 'Reply to emails', completed: false, date: today, priority: 'low', isLocking: false },
-    { id: '5', title: 'Meditate 10 min', completed: false, date: today, priority: 'medium', isLocking: false },
-  ]);
+  // Roll "today" over at midnight while the app stays open, and re-check
+  // whenever the tab/app returns to the foreground. This is what re-arms the
+  // blocker for a new day without a restart.
+  useEffect(() => {
+    const check = () => setToday(prev => {
+      const now = localToday();
+      return now === prev ? prev : now;
+    });
+    const id = setInterval(check, 30_000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, []);
 
-  const [habits, setHabits] = useLocalStorage<Habit[]>('tl_habits', [
-    { id: '1', title: 'Morning workout', emoji: '💪', completedDates: [], color: '#FF6B35', targetDays: [1, 2, 3, 4, 5] },
-    { id: '2', title: 'Read 30 min', emoji: '📚', completedDates: [], color: '#4F9EF8', targetDays: [0, 1, 2, 3, 4, 5, 6] },
-    { id: '3', title: 'Meditate', emoji: '🧘', completedDates: [], color: '#A78BFA', targetDays: [0, 1, 2, 3, 4, 5, 6] },
-    { id: '4', title: 'No social media', emoji: '📵', completedDates: [], color: '#34D399', targetDays: [1, 2, 3, 4, 5] },
-  ]);
-
-  const [blockedApps, setBlockedApps] = useLocalStorage<BlockedApp[]>('tl_blocked', [
-    { id: '1', name: 'Instagram', icon: '📸', url: 'https://instagram.com' },
-    { id: '2', name: 'Twitter / X', icon: '🐦', url: 'https://x.com' },
-    { id: '3', name: 'YouTube', icon: '▶️', url: 'https://youtube.com' },
-    { id: '4', name: 'TikTok', icon: '🎵', url: 'https://tiktok.com' },
-    { id: '5', name: 'Reddit', icon: '🟠', url: 'https://reddit.com' },
-  ]);
+  const [tasks, setTasks] = useLocalStorage<Task[]>('tl_tasks', []);
+  const [habits, setHabits] = useLocalStorage<Habit[]>('tl_habits', []);
 
   const [selectedDate, setSelectedDate] = useState(today);
 
@@ -72,7 +83,7 @@ export function useStore() {
   const addTask = useCallback((title: string, priority: Priority, isLocking: boolean) => {
     setTasks(prev => [
       ...(Array.isArray(prev) ? prev : []),
-      { id: Date.now().toString(), title, completed: false, date: selectedDate, priority, isLocking },
+      { id: uid(), title, completed: false, date: selectedDate, priority, isLocking },
     ]);
   }, [selectedDate, setTasks]);
 
@@ -98,7 +109,7 @@ export function useStore() {
   const addHabit = useCallback((title: string, emoji: string, color: string, targetDays: number[]) => {
     setHabits(prev => [
       ...(Array.isArray(prev) ? prev : []),
-      { id: Date.now().toString(), title, emoji, completedDates: [], color, targetDays },
+      { id: uid(), title, emoji, completedDates: [], color, targetDays },
     ]);
   }, [setHabits]);
 
@@ -106,23 +117,13 @@ export function useStore() {
     setHabits(prev => (Array.isArray(prev) ? prev : []).filter(h => h.id !== id));
   }, [setHabits]);
 
-  const addBlockedApp = useCallback((name: string, icon: string, url: string) => {
-    setBlockedApps(prev => [
-      ...(Array.isArray(prev) ? prev : []),
-      { id: Date.now().toString(), name, icon, url },
-    ]);
-  }, [setBlockedApps]);
-
-  const removeBlockedApp = useCallback((id: string) => {
-    setBlockedApps(prev => (Array.isArray(prev) ? prev : []).filter(a => a.id !== id));
-  }, [setBlockedApps]);
-
   const getStreak = useCallback((habit: Habit): number => {
     let streak = 0;
     const d = new Date();
-    while (streak < 365) {
-      const dateStr = d.toISOString().split('T')[0];
-      if (!habit.completedDates.includes(dateStr)) break;
+    // A streak isn't broken just because today isn't checked off yet.
+    if (!habit.completedDates.includes(toLocalDateStr(d))) d.setDate(d.getDate() - 1);
+    while (streak < 3650) {
+      if (!habit.completedDates.includes(toLocalDateStr(d))) break;
       streak++;
       d.setDate(d.getDate() - 1);
     }
@@ -134,7 +135,7 @@ export function useStore() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(toLocalDateStr(d));
     }
     return days;
   }, []);
@@ -142,7 +143,6 @@ export function useStore() {
   return {
     tasks,
     habits,
-    blockedApps,
     selectedDate,
     setSelectedDate,
     today,
@@ -157,8 +157,6 @@ export function useStore() {
     toggleHabit,
     addHabit,
     deleteHabit,
-    addBlockedApp,
-    removeBlockedApp,
     getStreak,
     getLast7Days,
   };

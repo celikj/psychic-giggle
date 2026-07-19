@@ -95,3 +95,5 @@ export function useScreenTime() {
 
   return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, refresh, isNativeIOS };
 }
+
+export type ScreenTimeController = ReturnType<typeof useScreenTime>;

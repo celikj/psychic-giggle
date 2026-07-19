@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { toLocalDateStr } from '../lib/date';
 
 interface Props {
   selectedDate: string;
@@ -32,7 +33,7 @@ export default function CalendarStrip({ selectedDate, onSelectDate, today, compl
       style={{ scrollbarWidth: 'none' }}
     >
       {dates.map(date => {
-        const ds = date.toISOString().split('T')[0];
+        const ds = toLocalDateStr(date);
         const isSelected = ds === selectedDate;
         const isToday = ds === today;
         const isDone = completedDates.has(ds);

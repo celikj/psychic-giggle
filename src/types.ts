@@ -17,10 +17,3 @@ export interface Habit {
   color: string;
   targetDays: number[];
 }
-
-export interface BlockedApp {
-  id: string;
-  name: string;
-  icon: string;
-  url: string;
-}

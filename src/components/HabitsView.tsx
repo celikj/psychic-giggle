@@ -122,6 +122,7 @@ export default function HabitsView({ store }: Props) {
                 {/* Check button */}
                 <button
                   onClick={() => toggleHabit(habit.id)}
+                  aria-label={doneToday ? `Uncheck "${habit.title}" for today` : `Check off "${habit.title}" for today`}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 ${
                     doneToday ? 'scale-105' : 'bg-white/5 border border-white/10'
                   }`}
@@ -133,6 +134,7 @@ export default function HabitsView({ store }: Props) {
                 {/* Delete */}
                 <button
                   onClick={() => deleteHabit(habit.id)}
+                  aria-label={`Delete habit "${habit.title}"`}
                   className="p-1.5 rounded-xl hover:bg-white/10 transition-colors"
                 >
                   <Trash2 className="w-4 h-4 text-white/15 hover:text-red-400 transition-colors" />
@@ -151,12 +153,12 @@ export default function HabitsView({ store }: Props) {
                         {DAY_LABELS[d.getDay()]}
                       </span>
                       <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                          isToday2 ? 'ring-1' : ''
-                        }`}
+                        className="w-5 h-5 rounded-full flex items-center justify-center transition-all"
                         style={{
                           backgroundColor: done ? habit.color : 'rgba(255,255,255,0.06)',
-                          ringColor: done ? habit.color : 'rgba(255,255,255,0.2)',
+                          boxShadow: isToday2
+                            ? `0 0 0 1.5px ${done ? habit.color : 'rgba(255,255,255,0.25)'}`
+                            : undefined,
                         }}
                       >
                         {done && <span className="text-[9px] text-white font-bold">✓</span>}
