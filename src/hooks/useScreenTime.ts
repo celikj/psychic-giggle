@@ -75,14 +75,15 @@ export function useScreenTime() {
   }, [refresh]);
 
   /**
-   * Keep the native midnight re-arm schedule in step with which upcoming days
-   * still have incomplete locking tasks, so apps re-lock for a new day even
-   * if TaskLock is never opened.
+   * Keep the native re-arm schedules in step with which upcoming days (and,
+   * for timed locking dailies, which specific times of day) still have
+   * incomplete locking items — so apps re-lock even if TaskLock is never
+   * opened.
    */
-  const updateSchedule = useCallback(async (dates: string[]) => {
+  const updateSchedule = useCallback(async (dates: string[], timedDates: Record<string, string[]>) => {
     if (!isNativeIOS) return;
     try {
-      await ScreenTime.updateSchedule({ dates, enabled });
+      await ScreenTime.updateSchedule({ dates, timedDates, enabled });
     } catch {
       /* older native build without the method — in-app sync still works */
     }

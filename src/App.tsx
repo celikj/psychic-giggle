@@ -44,15 +44,22 @@ export default function App() {
   // Tell the native layer which days (today or later) still have incomplete
   // locking to-dos or all-day locking dailies, so the midnight DeviceActivity
   // schedule can re-lock apps for a new day even if TaskLock is never opened.
+  // Timed locking dailies get their own per-time schedule alongside it, so
+  // e.g. a 9 PM lock still engages on time even if the app is never opened.
   const pendingLockDates = useMemo(
     () => store.getPendingLockDates(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store.tasks, store.dailies, store.today],
   );
-  useEffect(() => {
-    st.updateSchedule(pendingLockDates);
+  const pendingTimedLockDates = useMemo(
+    () => store.getPendingTimedLockDates(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingLockDates.join(','), st.enabled, st.status.authorization, st.status.selectionCount]);
+    [store.dailies, store.today],
+  );
+  useEffect(() => {
+    st.updateSchedule(pendingLockDates, pendingTimedLockDates);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingLockDates.join(','), JSON.stringify(pendingTimedLockDates), st.enabled, st.status.authorization, st.status.selectionCount]);
 
   // Reminders: a heads-up before each timed locking daily starts gating, and
   // a one-shot nudge tonight if something is still locking apps by evening.

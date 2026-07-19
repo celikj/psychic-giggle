@@ -186,8 +186,8 @@ export function useStore() {
   /**
    * Dates (today onward) the native midnight re-lock should arm for: days
    * with incomplete locking to-dos plus days an all-day locking daily is due.
-   * Timed dailies are excluded — they lock from their start time in-app, not
-   * at midnight.
+   * Timed dailies are handled separately by getPendingTimedLockDates, since
+   * they need to re-lock at their own start time, not at midnight.
    */
   const getPendingLockDates = useCallback((): string[] => {
     const dates = new Set(
@@ -204,6 +204,35 @@ export function useStore() {
     }
     return [...dates].sort();
   }, [tasks, dailies, today]);
+
+  /**
+   * For each distinct start time among timed locking dailies, the dates
+   * (today onward) it should re-arm for — i.e. at least one daily due at
+   * that time isn't completed yet. Keyed by "HH:MM" to match Daily.time, so
+   * the native layer can register one repeating schedule per time-of-day.
+   */
+  const getPendingTimedLockDates = useCallback((): Record<string, string[]> => {
+    const byTime = new Map<string, Daily[]>();
+    for (const d of dailies.filter(d => d.isLocking && d.time)) {
+      const list = byTime.get(d.time!) ?? [];
+      list.push(d);
+      byTime.set(d.time!, list);
+    }
+    const result: Record<string, string[]> = {};
+    byTime.forEach((ds, time) => {
+      const dates: string[] = [];
+      for (let i = 0; i < 14; i++) {
+        const dt = new Date();
+        dt.setDate(dt.getDate() + i);
+        const dateStr = toLocalDateStr(dt);
+        if (ds.some(d => d.targetDays.includes(dt.getDay()) && !d.completedDates.includes(dateStr))) {
+          dates.push(dateStr);
+        }
+      }
+      if (dates.length > 0) result[time] = dates;
+    });
+    return result;
+  }, [dailies]);
 
   const getStreak = useCallback((habit: Habit): number => {
     let streak = 0;
@@ -247,6 +276,7 @@ export function useStore() {
     completedToday,
     getCompletedDates,
     getPendingLockDates,
+    getPendingTimedLockDates,
     addTask,
     editTask,
     toggleTask,

@@ -155,47 +155,83 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         #endif
     }
 
-    /// Syncs the midnight re-arm state. The web layer calls this whenever the
-    /// set of dates with pending locking tasks (or the enabled flag) changes.
-    /// While active, a repeating daily DeviceActivity schedule wakes the
-    /// TaskMonitor extension at midnight, which re-applies the shield if the
-    /// new day is in the pending list — no app launch required.
+    /// Syncs the native re-arm schedules. The web layer calls this whenever
+    /// the set of dates with pending locking to-dos/all-day dailies, or the
+    /// per-time pending dates for timed locking dailies, changes.
+    ///
+    /// Two kinds of DeviceActivity schedule keep TaskMonitor woken up without
+    /// the app running: one repeating midnight schedule for all-day items,
+    /// and one repeating schedule per distinct daily start time (e.g. 21:00
+    /// for "Brush teeth") so a timed locking daily re-locks apps right on
+    /// time even if TaskLock was never opened that day.
     @objc func updateSchedule(_ call: CAPPluginCall) {
         #if canImport(FamilyControls) && canImport(DeviceActivity)
         let dates = call.getArray("dates", String.self) ?? []
         let enabled = call.getBool("enabled") ?? false
 
+        var timedDates: [String: [String]] = [:]
+        for (key, value) in call.getObject("timedDates") ?? [:] {
+            if let arr = value as? [String] {
+                timedDates[key] = arr
+            } else if let arr = value as? [Any] {
+                timedDates[key] = arr.compactMap { $0 as? String }
+            }
+        }
+
         let defaults = TaskLockShared.defaults
         defaults?.set(dates, forKey: TaskLockShared.pendingDatesKey)
+        TaskLockShared.savePendingTimedDates(timedDates)
         defaults?.set(enabled, forKey: TaskLockShared.enabledKey)
 
         let center = DeviceActivityCenter()
-        let activity = DeviceActivityName("tasklock.daily")
-
-        let shouldMonitor = enabled
-            && !dates.isEmpty
+        let armed = enabled
             && AuthorizationCenter.shared.authorizationStatus == .approved
             && (loadSelection().map { selectionCount($0) > 0 } ?? false)
 
-        if shouldMonitor {
-            if !center.activities.contains(activity) {
+        // Midnight schedule — all-day locking to-dos and dailies.
+        let midnight = DeviceActivityName(TaskLockShared.midnightActivityName)
+        let shouldMonitorMidnight = armed && !dates.isEmpty
+        if shouldMonitorMidnight {
+            if !center.activities.contains(midnight) {
                 let schedule = DeviceActivitySchedule(
                     intervalStart: DateComponents(hour: 0, minute: 0),
                     intervalEnd: DateComponents(hour: 23, minute: 59),
                     repeats: true
                 )
                 do {
-                    try center.startMonitoring(activity, during: schedule)
+                    try center.startMonitoring(midnight, during: schedule)
                 } catch {
                     call.reject("Could not schedule the midnight re-lock. (\(error.localizedDescription))")
                     return
                 }
             }
-            call.resolve(["monitoring": true])
         } else {
-            center.stopMonitoring([activity])
-            call.resolve(["monitoring": false])
+            center.stopMonitoring([midnight])
         }
+
+        // Per-time schedules — one per distinct timed locking daily start time.
+        let desiredTimes: Set<String> = armed
+            ? Set(timedDates.filter { !$0.value.isEmpty }.keys)
+            : []
+        let currentTimes = Set(center.activities.compactMap { TaskLockShared.time(fromActivityName: $0.rawValue) })
+
+        let namesToStop = currentTimes.subtracting(desiredTimes).map {
+            DeviceActivityName(TaskLockShared.timedActivityName(for: $0))
+        }
+        if !namesToStop.isEmpty { center.stopMonitoring(namesToStop) }
+
+        for time in desiredTimes.subtracting(currentTimes) {
+            guard let comps = TaskLockShared.hourMinute(from: time) else { continue }
+            let activity = DeviceActivityName(TaskLockShared.timedActivityName(for: time))
+            let schedule = DeviceActivitySchedule(
+                intervalStart: DateComponents(hour: comps.hour, minute: comps.minute),
+                intervalEnd: DateComponents(hour: 23, minute: 59),
+                repeats: true
+            )
+            try? center.startMonitoring(activity, during: schedule)
+        }
+
+        call.resolve(["monitoring": shouldMonitorMidnight || !desiredTimes.isEmpty])
         #else
         call.resolve(["monitoring": false])
         #endif

@@ -42,7 +42,7 @@ npx cap open ios     # opens ios/App/App.xcodeproj in Xcode
 ```
 In Xcode: select your iPhone, set a Team under *Signing & Capabilities* (a free personal team works), then press ▶︎ Run. Bundle id is `com.celikj.tasklock`.
 
-> Note: real blocking of *other* iOS apps uses Apple's Screen Time / Family Controls entitlement. The app ships three targets: the app itself, a `ShieldConfig` extension (custom block screen), and a `TaskMonitor` DeviceActivity extension that re-applies the block at midnight for any new day with pending locking tasks — even if TaskLock isn't opened. They share state through the `group.com.celikj.tasklock` App Group; with automatic signing, Xcode (or the TestFlight workflow) registers the group for you.
+> Note: real blocking of *other* iOS apps uses Apple's Screen Time / Family Controls entitlement. The app ships three targets: the app itself, a `ShieldConfig` extension (custom block screen), and a `TaskMonitor` DeviceActivity extension that re-applies the block — at midnight for any new day with pending locking to-dos/dailies, and at each timed locking daily's own start time (one native schedule per distinct time) — even if TaskLock isn't opened. They share state through the `group.com.celikj.tasklock` App Group; with automatic signing, Xcode (or the TestFlight workflow) registers the group for you.
 
 ### Option 4 — From source (web)
 

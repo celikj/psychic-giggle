@@ -5,10 +5,12 @@ import ManagedSettings
 import FamilyControls
 #endif
 
-/// Runs headless when the daily DeviceActivity schedule ticks over at
-/// midnight. If the new day has pending locking tasks (as last synced by the
-/// app), it re-applies the shield — so apps re-lock for a new day even when
-/// TaskLock itself is never opened.
+/// Runs headless whenever one of TaskLock's DeviceActivity schedules ticks
+/// over: the daily midnight schedule (all-day locking items), or one of the
+/// per-time schedules registered for timed locking dailies. Either way, if
+/// today is in the relevant pending-dates set (as last synced by the app),
+/// it re-applies the shield — so apps re-lock even when TaskLock itself is
+/// never opened.
 class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     private let store = ManagedSettingsStore()
 
@@ -18,8 +20,20 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
         guard let defaults = TaskLockShared.defaults,
               defaults.bool(forKey: TaskLockShared.enabledKey) else { return }
 
-        let pending = defaults.stringArray(forKey: TaskLockShared.pendingDatesKey) ?? []
-        guard pending.contains(TaskLockShared.localDateString()) else { return }
+        let today = TaskLockShared.localDateString()
+        let name = activity.rawValue
+
+        let isPending: Bool
+        if name == TaskLockShared.midnightActivityName {
+            let pending = defaults.stringArray(forKey: TaskLockShared.pendingDatesKey) ?? []
+            isPending = pending.contains(today)
+        } else if let time = TaskLockShared.time(fromActivityName: name) {
+            let pendingByTime = TaskLockShared.loadPendingTimedDates()
+            isPending = pendingByTime[time]?.contains(today) ?? false
+        } else {
+            isPending = false
+        }
+        guard isPending else { return }
 
         #if canImport(FamilyControls)
         if let selection = TaskLockShared.loadSelection() {
