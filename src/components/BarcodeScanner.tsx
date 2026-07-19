@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, ScanBarcode, Keyboard } from 'lucide-react';
+import { hapticWarning } from '../lib/haptics';
 
 interface Props {
   title: string;
@@ -29,6 +30,7 @@ export default function BarcodeScanner({ title, subtitle, expectedCode, onResult
     const trimmed = code.trim();
     if (handled.current || !trimmed) return;
     if (expectedCode && trimmed !== expectedCode) {
+      hapticWarning();
       setMismatch(true);
       clearTimeout(mismatchTimer.current);
       mismatchTimer.current = setTimeout(() => setMismatch(false), 2500);

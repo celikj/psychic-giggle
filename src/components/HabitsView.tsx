@@ -3,6 +3,7 @@ import { Plus, Flame, X } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Habit } from '../types';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
+import { hapticTick } from '../lib/haptics';
 
 interface Props { store: Store }
 
@@ -141,7 +142,7 @@ export default function HabitsView({ store }: Props) {
 
                 {/* Check button */}
                 <button
-                  onClick={() => toggleHabit(habit.id)}
+                  onClick={() => { hapticTick(); toggleHabit(habit.id); }}
                   aria-label={doneToday ? `Uncheck "${habit.title}" for today` : `Check off "${habit.title}" for today`}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 ${
                     doneToday ? 'scale-105' : 'bg-white/5 border border-white/10'

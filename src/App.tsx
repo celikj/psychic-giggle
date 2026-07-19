@@ -10,6 +10,7 @@ import BlockerView from './components/BlockerView';
 import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import Onboarding from './components/Onboarding';
+import { hapticSuccess } from './lib/haptics';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
 
@@ -66,6 +67,7 @@ export default function App() {
   const hadLocking = store.hasLockingToday;
   useEffect(() => {
     if (!prevDone.current && store.allLockingDone && hadLocking) {
+      hapticSuccess();
       setCelebrated(true);
       const id = setTimeout(() => setCelebrated(false), 3000);
       prevDone.current = store.allLockingDone;

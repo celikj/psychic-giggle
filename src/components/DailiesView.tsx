@@ -4,6 +4,7 @@ import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
+import { hapticTick } from '../lib/haptics';
 
 interface Props { store: Store }
 
@@ -89,6 +90,7 @@ export default function DailiesView({ store }: Props) {
       setScanTarget(daily);
       return;
     }
+    hapticTick();
     toggleDaily(daily.id);
   };
 
@@ -213,6 +215,7 @@ export default function DailiesView({ store }: Props) {
             if (scanTarget === 'capture') {
               setBarcode(code);
             } else {
+              hapticTick();
               toggleDaily(scanTarget.id);
             }
             setScanTarget(null);

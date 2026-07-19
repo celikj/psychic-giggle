@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { hapticDelete } from '../lib/haptics';
 
 interface Props {
   /** Accessible name, e.g. `Delete "Write report"`. */
@@ -13,7 +14,10 @@ export default function ConfirmDeleteButton({ label, onConfirm, warnLocking }: P
     const message = warnLocking
       ? "This is locking your apps right now — deleting it unlocks them without finishing it. Delete anyway?"
       : "Delete this? This can't be undone.";
-    if (window.confirm(message)) onConfirm();
+    if (window.confirm(message)) {
+      hapticDelete();
+      onConfirm();
+    }
   };
 
   return (

@@ -4,6 +4,7 @@ import type { Store } from '../hooks/useStore';
 import type { Priority, Task } from '../types';
 import CalendarStrip from './CalendarStrip';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
+import { hapticTick } from '../lib/haptics';
 
 interface Props {
   store: Store;
@@ -152,7 +153,7 @@ export default function TasksView({ store }: Props) {
 
             {/* Checkbox */}
             <button
-              onClick={() => toggleTask(task.id)}
+              onClick={() => { hapticTick(); toggleTask(task.id); }}
               aria-label={task.completed ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
               className="flex-shrink-0 transition-transform active:scale-90"
             >
