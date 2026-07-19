@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStore } from './hooks/useStore';
 import { useScreenTime } from './hooks/useScreenTime';
 import TasksView from './components/TasksView';
+import DailiesView from './components/DailiesView';
 import HabitsView from './components/HabitsView';
 import BlockerView from './components/BlockerView';
 import BottomNav from './components/BottomNav';
 import Onboarding, { ONBOARDED_KEY } from './components/Onboarding';
 
-type Tab = 'tasks' | 'habits' | 'blocker';
+type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('tasks');
@@ -31,25 +32,22 @@ export default function App() {
   }, [store.allLockingDone, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
 
   // Tell the native layer which days (today or later) still have incomplete
-  // locking tasks, so the midnight DeviceActivity schedule can re-lock apps
-  // for a new day even if TaskLock is never opened.
+  // locking to-dos or all-day locking dailies, so the midnight DeviceActivity
+  // schedule can re-lock apps for a new day even if TaskLock is never opened.
   const pendingLockDates = useMemo(
-    () => [...new Set(
-      store.tasks
-        .filter(t => t.isLocking && !t.completed && t.date >= store.today)
-        .map(t => t.date),
-    )].sort(),
-    [store.tasks, store.today],
+    () => store.getPendingLockDates(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store.tasks, store.dailies, store.today],
   );
   useEffect(() => {
     st.updateSchedule(pendingLockDates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingLockDates.join(','), st.enabled, st.status.authorization, st.status.selectionCount]);
 
-  // Unlock celebration, shown wherever the last locking task is completed.
+  // Unlock celebration, shown wherever the last locking item is completed.
   const [celebrated, setCelebrated] = useState(false);
   const prevDone = useRef(store.allLockingDone);
-  const hadLocking = store.tasks.some(t => t.date === store.today && t.isLocking);
+  const hadLocking = store.hasLockingToday;
   useEffect(() => {
     if (!prevDone.current && store.allLockingDone && hadLocking) {
       setCelebrated(true);
@@ -85,6 +83,7 @@ export default function App() {
 
       <div className="overflow-y-auto" style={{ minHeight: '100vh' }}>
         {activeTab === 'tasks'   && <TasksView store={store} onShowIntro={() => setShowIntro(true)} />}
+        {activeTab === 'dailies' && <DailiesView store={store} />}
         {activeTab === 'habits'  && <HabitsView store={store} />}
         {activeTab === 'blocker' && <BlockerView store={store} st={st} />}
       </div>

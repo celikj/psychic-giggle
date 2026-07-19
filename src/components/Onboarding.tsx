@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, CheckSquare, Flame, Shield, ChevronRight } from 'lucide-react';
+import { Lock, CheckSquare, CalendarClock, ScanBarcode, Flame, Shield, ChevronRight } from 'lucide-react';
 
 export const ONBOARDED_KEY = 'tl_onboarded';
 
@@ -26,8 +26,20 @@ export default function Onboarding({ isNativeIOS, onDone }: Props) {
     {
       icon: CheckSquare,
       accent: '#EF4444',
-      title: 'Locking Tasks',
-      body: 'Add tasks like any to-do list, and mark the important ones as Locking Tasks. As long as one is unfinished, your apps stay blocked.',
+      title: 'Locking To-Dos',
+      body: 'Add to-dos like any task list, and mark the important ones as Locking. As long as one is unfinished, your apps stay blocked.',
+    },
+    {
+      icon: CalendarClock,
+      accent: '#4F9EF8',
+      title: 'Dailies & Routines',
+      body: 'Repeating routines on the days you choose — with optional times. Laundry at 2:00 PM, brush teeth at 9:00 PM: a timed locking daily blocks your apps from its start time until you check it off.',
+    },
+    {
+      icon: ScanBarcode,
+      accent: '#A78BFA',
+      title: 'Prove It',
+      body: 'Attach a barcode to a daily — like the one on your toothpaste. TaskLock only lets you check it off after you scan that code with your camera. No cheating from the couch.',
     },
     {
       icon: Flame,

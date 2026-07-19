@@ -74,7 +74,7 @@ export default function TasksView({ store, onShowIntro }: Props) {
               <span className="text-xs font-semibold uppercase tracking-widest text-white/40">
                 {allLockingDone
                   ? 'Apps Unlocked'
-                  : `${lockingLeft} locking task${lockingLeft !== 1 ? 's' : ''} left`}
+                  : `${lockingLeft} left to unlock`}
               </span>
             </div>
             <h1 className="text-3xl font-bold text-white">{formatHeaderDate()}</h1>
