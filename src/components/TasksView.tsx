@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, Lock, CheckCircle2, Circle, X, HelpCircle } from 'lucide-react';
+import { Plus, Lock, CheckCircle2, Circle, X } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Priority, Task } from '../types';
 import CalendarStrip from './CalendarStrip';
@@ -7,7 +7,6 @@ import ConfirmDeleteButton from './ConfirmDeleteButton';
 
 interface Props {
   store: Store;
-  onShowIntro: () => void;
 }
 
 const PRIORITY_COLOR: Record<Priority, string> = {
@@ -16,7 +15,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   high: '#EF4444',
 };
 
-export default function TasksView({ store, onShowIntro }: Props) {
+export default function TasksView({ store }: Props) {
   const {
     todayTasks, completedToday, selectedDate, setSelectedDate, today,
     allLockingDone, lockingLeft, addTask, editTask, toggleTask, deleteTask, getCompletedDates,
@@ -97,32 +96,22 @@ export default function TasksView({ store, onShowIntro }: Props) {
             </p>
           </div>
 
-          <div className="flex items-start gap-1 flex-shrink-0">
-            <button
-              onClick={onShowIntro}
-              aria-label="How TaskLock works"
-              className="p-1.5 mt-1 rounded-xl text-white/25 hover:text-white/60 hover:bg-white/5 transition-colors"
-            >
-              <HelpCircle className="w-5 h-5" />
-            </button>
-
-            {/* Ring progress */}
-            <div className="relative w-14 h-14 flex-shrink-0 mt-1">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
-                <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
-                <circle
-                  cx="20" cy="20" r="16" fill="none"
-                  stroke={allLockingDone ? '#34D399' : '#FF6B35'}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeDasharray={`${strokeDash} ${circumference}`}
-                  style={{ transition: 'stroke-dasharray 0.6s ease, stroke 0.4s ease' }}
-                />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
-                {pct}%
-              </span>
-            </div>
+          {/* Ring progress */}
+          <div className="relative w-14 h-14 flex-shrink-0 mt-1">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
+              <circle
+                cx="20" cy="20" r="16" fill="none"
+                stroke={allLockingDone ? '#34D399' : '#FF6B35'}
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray={`${strokeDash} ${circumference}`}
+                style={{ transition: 'stroke-dasharray 0.6s ease, stroke 0.4s ease' }}
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
+              {pct}%
+            </span>
           </div>
         </div>
       </div>

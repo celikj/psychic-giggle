@@ -1,6 +1,6 @@
-import { CheckSquare, CalendarClock, Repeat2, ShieldOff } from 'lucide-react';
+import { CheckSquare, CalendarClock, Repeat2, ShieldOff, Settings } from 'lucide-react';
 
-type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker';
+type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
 
 interface Props {
   activeTab: Tab;
@@ -10,16 +10,17 @@ interface Props {
 }
 
 const tabs: { id: Tab; label: string; Icon: React.FC<{ className?: string }> }[] = [
-  { id: 'tasks',   label: 'To-Dos',  Icon: CheckSquare },
-  { id: 'dailies', label: 'Dailies', Icon: CalendarClock },
-  { id: 'habits',  label: 'Habits',  Icon: Repeat2 },
-  { id: 'blocker', label: 'Blocker', Icon: ShieldOff },
+  { id: 'tasks',    label: 'To-Dos',   Icon: CheckSquare },
+  { id: 'dailies',  label: 'Dailies',  Icon: CalendarClock },
+  { id: 'habits',   label: 'Habits',   Icon: Repeat2 },
+  { id: 'blocker',  label: 'Blocker',  Icon: ShieldOff },
+  { id: 'settings', label: 'Settings', Icon: Settings },
 ];
 
 export default function BottomNav({ activeTab, setActiveTab, allLockingDone, lockingLeft }: Props) {
   return (
     <div
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex items-center justify-around px-4 pb-safe border-t border-white/5"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex items-center justify-around px-1 pb-safe border-t border-white/5"
       style={{ background: 'rgba(10,10,15,0.95)', backdropFilter: 'blur(20px)', paddingBottom: 'max(env(safe-area-inset-bottom), 16px)', paddingTop: '12px' }}
     >
       {tabs.map(({ id, label, Icon }) => {
@@ -29,7 +30,7 @@ export default function BottomNav({ activeTab, setActiveTab, allLockingDone, loc
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex flex-col items-center gap-1 relative px-3 transition-all duration-200 ${
+            className={`flex flex-col items-center gap-1 relative px-2 transition-all duration-200 ${
               isActive ? 'opacity-100' : 'opacity-40 hover:opacity-60'
             }`}
           >

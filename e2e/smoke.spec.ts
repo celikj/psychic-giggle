@@ -20,9 +20,10 @@ test.describe('onboarding', () => {
     await expect(page.getByText('Welcome to TaskLock')).not.toBeVisible();
   });
 
-  test('the help button on the Tasks tab replays it', async ({ page }) => {
+  test('Settings > Replay the intro shows it again', async ({ page }) => {
     await skipOnboarding(page);
-    await page.getByRole('button', { name: 'How TaskLock works' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Replay the intro' }).click();
     await expect(page.getByText('Welcome to TaskLock')).toBeVisible();
   });
 });
@@ -121,6 +122,19 @@ test.describe('editing', () => {
     });
     await page.getByRole('button', { name: 'Delete "Edited title"' }).click();
     await expect(page.getByText('Edited title')).not.toBeVisible();
+  });
+});
+
+test.describe('settings', () => {
+  test('shows the on-device privacy note and export/import rows', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+
+    await expect(page.getByText('Everything stays on this device')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Export data' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Import data' })).toBeVisible();
+    // Not running as a native app in this suite, so reminders can't be enabled here.
+    await expect(page.getByText('Available in the iPhone app')).toBeVisible();
   });
 });
 

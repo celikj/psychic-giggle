@@ -7,10 +7,11 @@ import TasksView from './components/TasksView';
 import DailiesView from './components/DailiesView';
 import HabitsView from './components/HabitsView';
 import BlockerView from './components/BlockerView';
+import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import Onboarding from './components/Onboarding';
 
-type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker';
+type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('tasks');
@@ -97,10 +98,11 @@ export default function App() {
       )}
 
       <div className="overflow-y-auto" style={{ minHeight: '100vh' }}>
-        {activeTab === 'tasks'   && <TasksView store={store} onShowIntro={() => setShowIntro(true)} />}
-        {activeTab === 'dailies' && <DailiesView store={store} />}
-        {activeTab === 'habits'  && <HabitsView store={store} />}
-        {activeTab === 'blocker' && <BlockerView store={store} st={st} />}
+        {activeTab === 'tasks'    && <TasksView store={store} />}
+        {activeTab === 'dailies'  && <DailiesView store={store} />}
+        {activeTab === 'habits'   && <HabitsView store={store} />}
+        {activeTab === 'blocker'  && <BlockerView store={store} st={st} />}
+        {activeTab === 'settings' && <SettingsView notif={notif} onShowIntro={() => setShowIntro(true)} />}
       </div>
       <BottomNav
         activeTab={activeTab}
