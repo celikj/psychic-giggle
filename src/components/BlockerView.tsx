@@ -1,51 +1,42 @@
-import { useState, useEffect, useRef } from 'react';
-import { Lock, Unlock, Shield, ShieldCheck, ChevronRight, Loader2, Smartphone } from 'lucide-react';
+import { Lock, Unlock, Shield, ShieldCheck, ChevronRight, Loader2, Smartphone, CheckCircle2, Circle, Clock } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
-import { useScreenTime } from '../hooks/useScreenTime';
+import type { ScreenTimeController } from '../hooks/useScreenTime';
 
-interface Props { store: Store }
+interface Props {
+  store: Store;
+  /** Shared controller owned by App, so the shield syncs from every tab. */
+  st: ScreenTimeController;
+}
 
-export default function BlockerView({ store }: Props) {
-  const { allLockingDone, lockingLeft, todayTasks, completedToday } = store;
+export default function BlockerView({ store, st }: Props) {
+  const { allLockingDone, lockingLeft } = store;
 
-  const st = useScreenTime();
-  // Keep the OS shield in step with whether locking tasks remain.
-  useEffect(() => {
-    st.sync(!allLockingDone);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allLockingDone, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
+  // Always today's items — the lock state ignores the calendar's selected date.
+  const todaysAll = store.tasks.filter(t => t.date === store.today);
+  const completedToday = todaysAll.filter(t => t.completed).length;
+  const lockingTasks = todaysAll.filter(t => t.isLocking);
+  const lockingDailies = store.dueDailies.filter(d => d.isLocking);
 
-  const [celebrated, setCelebrated] = useState(false);
-  const prevDone = useRef(allLockingDone);
+  // One merged list of everything that gates apps today.
+  const lockingItems = [
+    ...lockingTasks.map(t => ({ id: `t-${t.id}`, title: t.title, done: t.completed, time: undefined as string | undefined })),
+    ...lockingDailies.map(d => ({ id: `d-${d.id}`, title: d.title, done: store.isDailyDoneToday(d), time: d.time })),
+  ];
+  const lockingDone = lockingItems.filter(i => i.done).length;
+  const lockingPct = lockingItems.length === 0 ? 100 : Math.round((lockingDone / lockingItems.length) * 100);
 
-  useEffect(() => {
-    if (!prevDone.current && allLockingDone) {
-      setCelebrated(true);
-      setTimeout(() => setCelebrated(false), 3000);
-    }
-    prevDone.current = allLockingDone;
-  }, [allLockingDone]);
-
-  const lockingTasks = todayTasks.filter(t => t.isLocking);
-  const lockingDone = lockingTasks.filter(t => t.completed).length;
-  const lockingPct = lockingTasks.length === 0 ? 100 : Math.round((lockingDone / lockingTasks.length) * 100);
+  const formatGateTime = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  };
 
   const approved = st.status.authorization === 'approved';
   const hasSelection = st.status.selectionCount > 0;
 
   return (
     <div className="flex flex-col pb-24">
-      {/* Celebration overlay */}
-      {celebrated && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div className="bg-green-500/20 border border-green-400/40 backdrop-blur-xl rounded-3xl px-10 py-8 text-center animate-celebrate">
-            <div className="text-6xl mb-3">🎉</div>
-            <p className="text-white font-bold text-xl">Apps Unlocked!</p>
-            <p className="text-green-300/70 text-sm mt-1">All locking tasks done</p>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="px-5 pt-14 pb-6">
         <div className="flex items-center gap-3 mb-2">
@@ -65,9 +56,13 @@ export default function BlockerView({ store }: Props) {
               {allLockingDone ? 'Apps Unlocked' : 'Apps Locked'}
             </h1>
             <p className="text-sm text-white/40">
-              {allLockingDone
-                ? 'Great job! Your apps are open.'
-                : `Finish ${lockingLeft} task${lockingLeft !== 1 ? 's' : ''} to unlock`}
+              {!allLockingDone
+                ? `Finish ${lockingLeft} item${lockingLeft !== 1 ? 's' : ''} to unlock`
+                : store.nextGate
+                  ? `Apps lock again at ${formatGateTime(store.nextGate.time!)} — ${store.nextGate.title}`
+                  : lockingItems.length > 0
+                    ? 'Great job! Your apps are open.'
+                    : 'No locking items today — add a locking to-do or daily'}
             </p>
           </div>
         </div>
@@ -88,12 +83,38 @@ export default function BlockerView({ store }: Props) {
               />
             </div>
             <div className="flex justify-between text-xs text-white/20 mt-1.5">
-              <span>{completedToday} / {todayTasks.length} tasks done today</span>
-              <span>{lockingDone} / {lockingTasks.length} locking</span>
+              <span>{completedToday} / {todaysAll.length} to-dos done today</span>
+              <span>{lockingDone} / {lockingItems.length} locking</span>
             </div>
           </div>
         )}
       </div>
+
+      {/* Today's locking items */}
+      {lockingItems.length > 0 && (
+        <div className="px-4 mb-4">
+          <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2 px-1">
+            Locking items today
+          </p>
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/5">
+            {lockingItems.map(item => (
+              <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                {item.done
+                  ? <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  : <Circle className="w-4 h-4 text-red-400/60 flex-shrink-0" />}
+                <span className={`flex-1 text-sm font-medium truncate ${item.done ? 'text-white/30 line-through' : 'text-white/80'}`}>
+                  {item.title}
+                </span>
+                {item.time && !item.done && (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-sky-300/80 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded-lg flex-shrink-0">
+                    <Clock className="w-3 h-3" /> {formatGateTime(item.time)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ---- Native Screen Time blocker (iOS only) ---- */}
       {st.isNativeIOS && (
@@ -110,15 +131,8 @@ export default function BlockerView({ store }: Props) {
               {st.busy && <Loader2 className="w-4 h-4 text-white/40 animate-spin" />}
             </div>
 
-            {/* Not supported */}
-            {!st.status.supported && (
-              <p className="mt-4 text-xs text-white/40 leading-relaxed">
-                App blocking needs iOS&nbsp;16 or later. Update your iPhone to use it.
-              </p>
-            )}
-
             {/* Step 1 — permission */}
-            {st.status.supported && !approved && (
+            {!approved && (
               <>
                 <p className="mt-4 text-xs text-white/40 leading-relaxed">
                   Grant Screen Time access, then pick the apps you want locked while tasks are pending.
@@ -136,7 +150,7 @@ export default function BlockerView({ store }: Props) {
             )}
 
             {/* Step 2 — pick apps via Apple's system picker */}
-            {st.status.supported && approved && (
+            {approved && (
               <div className="mt-4 space-y-3">
                 <button
                   onClick={st.chooseApps}
@@ -187,7 +201,7 @@ export default function BlockerView({ store }: Props) {
                           : 'bg-green-500/10 border-green-500/20 text-green-400'
                       }`}>
                         {st.status.blocking
-                          ? <><Lock className="w-3.5 h-3.5" /> Locked — finish {lockingLeft} task{lockingLeft !== 1 ? 's' : ''} to unlock</>
+                          ? <><Lock className="w-3.5 h-3.5" /> Locked — finish {lockingLeft} item{lockingLeft !== 1 ? 's' : ''} to unlock</>
                           : <><ShieldCheck className="w-3.5 h-3.5" /> Unlocked</>}
                       </div>
                     )}
@@ -198,7 +212,7 @@ export default function BlockerView({ store }: Props) {
           </div>
 
           <p className="text-center text-[11px] text-white/25 mt-4 px-6 leading-relaxed">
-            Mark a task as a <span className="text-white/50 font-medium">Locking Task</span> on the Tasks screen, and your chosen apps stay blocked until it's done.
+            Mark a to-do or daily as <span className="text-white/50 font-medium">Locking</span>, and your chosen apps stay blocked until it's done. Timed dailies lock from their start time.
           </p>
         </div>
       )}

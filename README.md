@@ -4,7 +4,8 @@ Lock distracting apps until your tasks are done. A task manager, habit tracker, 
 
 ## Features
 
-- **Tasks** — priorities (low/medium/high), a calendar strip, and a progress ring. Mark any task as a **Locking Task** to gate your apps behind it.
+- **To-Dos** — priorities (low/medium/high), a calendar strip, and a progress ring. Mark any to-do as **Locking** to gate your apps behind it.
+- **Dailies** — repeating routines on the weekdays you choose, with per-day streaks. Optional extras: a **time** (a timed locking daily blocks apps from its start time until done — laundry at 2 PM, teeth at 9 PM) and a **barcode** (register the code on the physical item; checking the daily off requires scanning it with the camera).
 - **Habits** — streaks, best-streak tracking, a last-7-days dot grid, custom emoji/colors, and target days.
 - **App Blocker** — distracting sites stay locked until every locking task for today is done. Finishing the last one triggers an unlock celebration.
 - Everything persists locally in your browser. Nothing is uploaded.
@@ -28,7 +29,7 @@ Download the binary for your platform from [Releases](../../releases):
 It starts a tiny local server and opens TaskLock in your browser. On macOS/Linux run `chmod +x tasklock-*` first.
 
 ### Option 3 — iPhone / iPad (native iOS app)
-TaskLock ships as a real native iOS app via [Capacitor](https://capacitorjs.com).
+TaskLock ships as a real native iOS app via [Capacitor](https://capacitorjs.com). **Requires iOS 16 or later** — the app targets the iOS versions that support Family Controls app blocking, so the blocker works on every device that can install it.
 
 **Without a Mac** — download `TaskLock-unsigned.ipa` from [Releases](../../releases) and install it with [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) using a free Apple ID (works from Windows too). Free-Apple-ID sideloads expire after 7 days and need a refresh.
 
@@ -41,7 +42,7 @@ npx cap open ios     # opens ios/App/App.xcodeproj in Xcode
 ```
 In Xcode: select your iPhone, set a Team under *Signing & Capabilities* (a free personal team works), then press ▶︎ Run. Bundle id is `com.celikj.tasklock`.
 
-> Note: the in-app "App Blocker" demonstrates the flow, but actually blocking *other* iOS apps requires Apple's Screen Time / Family Controls entitlement, which is a separate native integration.
+> Note: real blocking of *other* iOS apps uses Apple's Screen Time / Family Controls entitlement. The app ships three targets: the app itself, a `ShieldConfig` extension (custom block screen), and a `TaskMonitor` DeviceActivity extension that re-applies the block — at midnight for any new day with pending locking to-dos/dailies, and at each timed locking daily's own start time (one native schedule per distinct time) — even if TaskLock isn't opened. They share state through the `group.com.celikj.tasklock` App Group; with automatic signing, Xcode (or the TestFlight workflow) registers the group for you.
 
 ### Option 4 — From source (web)
 

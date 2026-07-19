@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { Plus, Trash2, Flame, X } from 'lucide-react';
+import { Plus, Flame, X } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Habit } from '../types';
+import ConfirmDeleteButton from './ConfirmDeleteButton';
+import { hapticTick } from '../lib/haptics';
+import { HABIT_TEMPLATES } from '../lib/templates';
 
 interface Props { store: Store }
 
@@ -10,9 +13,10 @@ const PRESET_EMOJIS = ['💪', '📚', '🧘', '📵', '🏃', '💧', '🛌', '
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 export default function HabitsView({ store }: Props) {
-  const { habits, today, toggleHabit, addHabit, deleteHabit, getStreak, getLast7Days } = store;
+  const { habits, today, toggleHabit, addHabit, editHabit, deleteHabit, getStreak, getLast7Days } = store;
 
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [color, setColor] = useState('#FF6B35');
@@ -23,14 +27,32 @@ export default function HabitsView({ store }: Props) {
   const totalDone = habits.filter(h => h.completedDates.includes(today)).length;
   const overallPct = habits.length === 0 ? 0 : Math.round((totalDone / habits.length) * 100);
 
-  const handleAdd = () => {
-    if (!title.trim()) return;
-    addHabit(title.trim(), emoji, color, targetDays);
+  const resetForm = () => {
+    setShowAdd(false);
+    setEditingId(null);
     setTitle('');
     setEmoji('🎯');
     setColor('#FF6B35');
     setTargetDays([0, 1, 2, 3, 4, 5, 6]);
-    setShowAdd(false);
+  };
+
+  const startEdit = (habit: Habit) => {
+    setEditingId(habit.id);
+    setTitle(habit.title);
+    setEmoji(habit.emoji);
+    setColor(habit.color);
+    setTargetDays(habit.targetDays);
+    setShowAdd(true);
+  };
+
+  const handleSubmit = () => {
+    if (!title.trim() || targetDays.length === 0) return;
+    if (editingId) {
+      editHabit(editingId, { title: title.trim(), emoji, color, targetDays: [...targetDays].sort() });
+    } else {
+      addHabit(title.trim(), emoji, color, targetDays);
+    }
+    resetForm();
   };
 
   const toggleDay = (d: number) => {
@@ -76,10 +98,36 @@ export default function HabitsView({ store }: Props) {
       {/* Habit cards */}
       <div className="px-4 space-y-2">
         {habits.length === 0 && !showAdd && (
-          <div className="text-center py-14 animate-slide-up">
-            <div className="text-5xl mb-3">🌱</div>
-            <p className="text-white/30 text-sm font-medium">No habits yet</p>
-            <p className="text-white/20 text-xs mt-1">Build consistent routines</p>
+          <div className="animate-slide-up">
+            <div className="text-center py-8">
+              <div className="text-5xl mb-3">🌱</div>
+              <p className="text-white/30 text-sm font-medium">No habits yet</p>
+              <p className="text-white/20 text-xs mt-1">Build consistent routines</p>
+            </div>
+            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-2 px-1">
+              Quick start
+            </p>
+            <div className="space-y-2">
+              {HABIT_TEMPLATES.map(t => (
+                <button
+                  key={t.title}
+                  onClick={() => addHabit(t.title, t.emoji, t.color, t.targetDays)}
+                  className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                    style={{ backgroundColor: t.color + '22', border: `1.5px solid ${t.color}44` }}
+                  >
+                    {t.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">{t.title}</p>
+                    <p className="text-xs text-white/40 mt-0.5">{t.subtitle}</p>
+                  </div>
+                  <Plus className="w-4 h-4 text-white/30 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -103,8 +151,8 @@ export default function HabitsView({ store }: Props) {
                   {habit.emoji}
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
+                {/* Info — tap to edit */}
+                <button onClick={() => startEdit(habit)} aria-label={`Edit habit "${habit.title}"`} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-white truncate">{habit.title}</span>
                     {streak > 0 && (
@@ -117,11 +165,12 @@ export default function HabitsView({ store }: Props) {
                   <p className="text-[11px] text-white/30 mt-0.5">
                     Best streak: {longest} day{longest !== 1 ? 's' : ''}
                   </p>
-                </div>
+                </button>
 
                 {/* Check button */}
                 <button
-                  onClick={() => toggleHabit(habit.id)}
+                  onClick={() => { hapticTick(); toggleHabit(habit.id); }}
+                  aria-label={doneToday ? `Uncheck "${habit.title}" for today` : `Check off "${habit.title}" for today`}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 active:scale-90 ${
                     doneToday ? 'scale-105' : 'bg-white/5 border border-white/10'
                   }`}
@@ -131,12 +180,10 @@ export default function HabitsView({ store }: Props) {
                 </button>
 
                 {/* Delete */}
-                <button
-                  onClick={() => deleteHabit(habit.id)}
-                  className="p-1.5 rounded-xl hover:bg-white/10 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4 text-white/15 hover:text-red-400 transition-colors" />
-                </button>
+                <ConfirmDeleteButton
+                  label={`Delete habit "${habit.title}"`}
+                  onConfirm={() => deleteHabit(habit.id)}
+                />
               </div>
 
               {/* Last 7 days */}
@@ -151,12 +198,12 @@ export default function HabitsView({ store }: Props) {
                         {DAY_LABELS[d.getDay()]}
                       </span>
                       <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                          isToday2 ? 'ring-1' : ''
-                        }`}
+                        className="w-5 h-5 rounded-full flex items-center justify-center transition-all"
                         style={{
                           backgroundColor: done ? habit.color : 'rgba(255,255,255,0.06)',
-                          ringColor: done ? habit.color : 'rgba(255,255,255,0.2)',
+                          boxShadow: isToday2
+                            ? `0 0 0 1.5px ${done ? habit.color : 'rgba(255,255,255,0.25)'}`
+                            : undefined,
                         }}
                       >
                         {done && <span className="text-[9px] text-white font-bold">✓</span>}
@@ -173,8 +220,8 @@ export default function HabitsView({ store }: Props) {
         {showAdd && (
           <div className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-4 animate-slide-up">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-white">New Habit</span>
-              <button onClick={() => setShowAdd(false)} className="p-1 rounded-lg hover:bg-white/10">
+              <span className="text-sm font-semibold text-white">{editingId ? 'Edit Habit' : 'New Habit'}</span>
+              <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
                 <X className="w-4 h-4 text-white/30" />
               </button>
             </div>
@@ -188,7 +235,7 @@ export default function HabitsView({ store }: Props) {
                 type="text"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                 placeholder="Habit name..."
                 className="flex-1 bg-transparent text-white placeholder-white/25 text-sm font-medium outline-none px-2 bg-white/5 rounded-xl border border-white/10"
               />
@@ -250,18 +297,18 @@ export default function HabitsView({ store }: Props) {
 
             <div className="flex gap-2 pt-1">
               <button
-                onClick={() => setShowAdd(false)}
+                onClick={resetForm}
                 className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
-                onClick={handleAdd}
-                disabled={!title.trim()}
+                onClick={handleSubmit}
+                disabled={!title.trim() || targetDays.length === 0}
                 className="flex-1 py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
                 style={{ backgroundColor: color }}
               >
-                Add Habit
+                {editingId ? 'Save Changes' : 'Add Habit'}
               </button>
             </div>
           </div>

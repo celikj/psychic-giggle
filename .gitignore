@@ -7,3 +7,6 @@ launcher/embedded.cjs
 TaskLock.html
 .DS_Store
 *.local
+test-results
+playwright-report
+blob-report

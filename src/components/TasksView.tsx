@@ -1,10 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, Lock, CheckCircle2, Circle, X } from 'lucide-react';
+import { Plus, Lock, CheckCircle2, Circle, X } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
-import type { Priority } from '../types';
+import type { Priority, Task } from '../types';
 import CalendarStrip from './CalendarStrip';
+import ConfirmDeleteButton from './ConfirmDeleteButton';
+import { hapticTick } from '../lib/haptics';
 
-interface Props { store: Store }
+interface Props {
+  store: Store;
+}
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   low: '#6B7280',
@@ -15,10 +19,11 @@ const PRIORITY_COLOR: Record<Priority, string> = {
 export default function TasksView({ store }: Props) {
   const {
     todayTasks, completedToday, selectedDate, setSelectedDate, today,
-    allLockingDone, lockingLeft, addTask, toggleTask, deleteTask, getCompletedDates,
+    allLockingDone, lockingLeft, addTask, editTask, toggleTask, deleteTask, getCompletedDates,
   } = store;
 
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newPriority, setNewPriority] = useState<Priority>('medium');
   const [newLocking, setNewLocking] = useState(false);
@@ -28,18 +33,30 @@ export default function TasksView({ store }: Props) {
     if (showAdd) setTimeout(() => inputRef.current?.focus(), 50);
   }, [showAdd]);
 
-  const handleAdd = () => {
-    if (!newTitle.trim()) return;
-    addTask(newTitle.trim(), newPriority, newLocking);
+  const resetForm = () => {
+    setShowAdd(false);
+    setEditingId(null);
     setNewTitle('');
     setNewPriority('medium');
     setNewLocking(false);
-    setShowAdd(false);
   };
 
-  const handleCancel = () => {
-    setShowAdd(false);
-    setNewTitle('');
+  const startEdit = (task: Task) => {
+    setEditingId(task.id);
+    setNewTitle(task.title);
+    setNewPriority(task.priority);
+    setNewLocking(task.isLocking);
+    setShowAdd(true);
+  };
+
+  const handleSubmit = () => {
+    if (!newTitle.trim()) return;
+    if (editingId) {
+      editTask(editingId, { title: newTitle.trim(), priority: newPriority, isLocking: newLocking });
+    } else {
+      addTask(newTitle.trim(), newPriority, newLocking);
+    }
+    resetForm();
   };
 
   const pct = todayTasks.length === 0 ? 0 : Math.round((completedToday / todayTasks.length) * 100);
@@ -71,7 +88,7 @@ export default function TasksView({ store }: Props) {
               <span className="text-xs font-semibold uppercase tracking-widest text-white/40">
                 {allLockingDone
                   ? 'Apps Unlocked'
-                  : `${lockingLeft} locking task${lockingLeft !== 1 ? 's' : ''} left`}
+                  : `${lockingLeft} left to unlock`}
               </span>
             </div>
             <h1 className="text-3xl font-bold text-white">{formatHeaderDate()}</h1>
@@ -136,7 +153,8 @@ export default function TasksView({ store }: Props) {
 
             {/* Checkbox */}
             <button
-              onClick={() => toggleTask(task.id)}
+              onClick={() => { hapticTick(); toggleTask(task.id); }}
+              aria-label={task.completed ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
               className="flex-shrink-0 transition-transform active:scale-90"
             >
               {task.completed
@@ -145,12 +163,16 @@ export default function TasksView({ store }: Props) {
               }
             </button>
 
-            {/* Title */}
-            <span className={`flex-1 text-sm font-medium leading-snug ${
-              task.completed ? 'text-white/30 line-through' : 'text-white'
-            }`}>
-              {task.title}
-            </span>
+            {/* Title — tap to edit */}
+            <button
+              onClick={() => startEdit(task)}
+              aria-label={`Edit "${task.title}"`}
+              className={`flex-1 text-left text-sm font-medium leading-snug min-w-0 ${
+                task.completed ? 'text-white/30 line-through' : 'text-white'
+              }`}
+            >
+              <span className="truncate block">{task.title}</span>
+            </button>
 
             {/* Lock tag */}
             {task.isLocking && !task.completed && (
@@ -161,32 +183,35 @@ export default function TasksView({ store }: Props) {
             )}
 
             {/* Delete */}
-            <button
-              onClick={() => deleteTask(task.id)}
-              className="flex-shrink-0 p-1.5 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
-            >
-              <Trash2 className="w-4 h-4 text-white/20 hover:text-red-400 transition-colors" />
-            </button>
+            <ConfirmDeleteButton
+              label={`Delete "${task.title}"`}
+              warnLocking={task.isLocking && !task.completed}
+              onConfirm={() => deleteTask(task.id)}
+            />
           </div>
         ))}
 
-        {/* Add task inline */}
+        {/* Add / edit task inline */}
         {showAdd && (
           <div className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-3 animate-slide-up">
-            <div className="flex items-center gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') handleCancel(); }}
-                placeholder="What needs to be done?"
-                className="flex-1 bg-transparent text-white placeholder-white/25 text-sm font-medium outline-none"
-              />
-              <button onClick={handleCancel} className="p-1 rounded-lg hover:bg-white/10">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-white/40 uppercase tracking-wider">
+                {editingId ? 'Edit Task' : 'New Task'}
+              </span>
+              <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
                 <X className="w-4 h-4 text-white/30" />
               </button>
             </div>
+
+            <input
+              ref={inputRef}
+              type="text"
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') resetForm(); }}
+              placeholder="What needs to be done?"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/25 text-sm font-medium outline-none"
+            />
 
             {/* Priority */}
             <div className="flex gap-2">
@@ -219,17 +244,17 @@ export default function TasksView({ store }: Props) {
 
             <div className="flex gap-2 pt-1">
               <button
-                onClick={handleCancel}
+                onClick={resetForm}
                 className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
-                onClick={handleAdd}
+                onClick={handleSubmit}
                 disabled={!newTitle.trim()}
                 className="flex-1 py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
               >
-                Add Task
+                {editingId ? 'Save Changes' : 'Add Task'}
               </button>
             </div>
           </div>

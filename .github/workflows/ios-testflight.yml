@@ -57,8 +57,10 @@ jobs:
           BN="${{ github.event.inputs.build_number }}"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BN" App/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BN" ShieldConfig/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BN" TaskMonitor/Info.plist
           plutil -p App/Info.plist | grep -i version || true
           plutil -p ShieldConfig/Info.plist | grep -i version || true
+          plutil -p TaskMonitor/Info.plist | grep -i version || true
 
       - name: Archive (Xcode-managed cloud signing)
         working-directory: ios/App

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import ScreenTime, { isNativeIOS, type ScreenTimeStatus } from '../native/screenTime';
-
-const ENABLED_KEY = 'tl_screentime_enabled';
+import { usePersisted } from './usePersisted';
 
 const DEFAULT_STATUS: ScreenTimeStatus = {
   supported: false,
@@ -17,7 +16,7 @@ const DEFAULT_STATUS: ScreenTimeStatus = {
  */
 export function useScreenTime() {
   const [status, setStatus] = useState<ScreenTimeStatus>(DEFAULT_STATUS);
-  const [enabled, setEnabledState] = useState<boolean>(() => localStorage.getItem(ENABLED_KEY) === '1');
+  const [enabled, setEnabledPersisted] = usePersisted<boolean>('tl_screentime_enabled', false);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -30,14 +29,13 @@ export function useScreenTime() {
   }, []);
 
   const setEnabled = useCallback(async (value: boolean) => {
-    localStorage.setItem(ENABLED_KEY, value ? '1' : '0');
-    setEnabledState(value);
+    setEnabledPersisted(value);
     // Turning the feature off should immediately release any active shield.
     if (!value && isNativeIOS) {
       try { await ScreenTime.stopBlocking(); } catch { /* ignore */ }
       await refresh();
     }
-  }, [refresh]);
+  }, [refresh, setEnabledPersisted]);
 
   useEffect(() => {
     refresh();
@@ -76,6 +74,21 @@ export function useScreenTime() {
     }
   }, [refresh]);
 
+  /**
+   * Keep the native re-arm schedules in step with which upcoming days (and,
+   * for timed locking dailies, which specific times of day) still have
+   * incomplete locking items — so apps re-lock even if TaskLock is never
+   * opened.
+   */
+  const updateSchedule = useCallback(async (dates: string[], timedDates: Record<string, string[]>) => {
+    if (!isNativeIOS) return;
+    try {
+      await ScreenTime.updateSchedule({ dates, timedDates, enabled });
+    } catch {
+      /* older native build without the method — in-app sync still works */
+    }
+  }, [enabled]);
+
   /** Keep the OS shield in step with whether locking tasks are still pending. */
   const sync = useCallback(async (shouldBlock: boolean) => {
     if (!isNativeIOS || !enabled) return;
@@ -93,5 +106,7 @@ export function useScreenTime() {
     }
   }, [enabled, status.authorization, status.selectionCount, status.blocking, refresh]);
 
-  return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, refresh, isNativeIOS };
+  return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, updateSchedule, refresh, isNativeIOS };
 }
+
+export type ScreenTimeController = ReturnType<typeof useScreenTime>;

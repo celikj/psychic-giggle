@@ -1,0 +1,167 @@
+import type { Task, Habit, Daily } from '../types';
+import { toLocalDateStr } from './date';
+
+/**
+ * Pure calculations backing useStore — streaks, lock/gate state, and the
+ * native re-arm date sets. Kept free of React so they're directly testable;
+ * every function that needs "now" takes it as a parameter (defaulting to
+ * `new Date()`) rather than reading the clock itself.
+ */
+
+export function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+export function minutesOfDay(d: Date): number {
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+export interface LockState {
+  /** Dailies due today (on today's weekday), locking or not. */
+  dueDailies: Daily[];
+  /** Locking dailies due today, not yet done, and past their start time (or untimed). */
+  gatingDailies: Daily[];
+  /** The next locking daily due today that hasn't started gating yet, if any. */
+  nextGate: Daily | null;
+  lockingTasksToday: Task[];
+  lockingLeft: number;
+  allLockingDone: boolean;
+  hasLockingToday: boolean;
+}
+
+/**
+ * What's currently gating (blocking) apps, and what's coming up. A locking
+ * daily gates once due: immediately if it has no time, from its start time
+ * if it does — until checked off. A locking to-do gates for as long as it's
+ * incomplete, regardless of time of day.
+ */
+export function computeLockState(tasks: Task[], dailies: Daily[], today: string, now: Date = new Date()): LockState {
+  const todayWeekday = now.getDay();
+  const nowMinutes = minutesOfDay(now);
+  const dueDailies = dailies.filter(d => d.targetDays.includes(todayWeekday));
+
+  const gatingDailies = dueDailies.filter(
+    d => d.isLocking && !d.completedDates.includes(today) && (!d.time || nowMinutes >= timeToMinutes(d.time)),
+  );
+  const upcomingGates = dueDailies
+    .filter(d => d.isLocking && !d.completedDates.includes(today) && d.time && nowMinutes < timeToMinutes(d.time))
+    .sort((a, b) => timeToMinutes(a.time!) - timeToMinutes(b.time!));
+  const nextGate = upcomingGates.length > 0 ? upcomingGates[0] : null;
+
+  const lockingTasksToday = tasks.filter(t => t.date === today && t.isLocking);
+  const lockingLeft = lockingTasksToday.filter(t => !t.completed).length + gatingDailies.length;
+  const allLockingDone = lockingLeft === 0;
+  const hasLockingToday = lockingTasksToday.length > 0 || dueDailies.some(d => d.isLocking);
+
+  return { dueDailies, gatingDailies, nextGate, lockingTasksToday, lockingLeft, allLockingDone, hasLockingToday };
+}
+
+/** Dates where every task that day is complete (and there's at least one). */
+export function computeCompletedDates(tasks: Task[]): Set<string> {
+  const dateMap = new Map<string, { total: number; completed: number }>();
+  tasks.forEach(t => {
+    const existing = dateMap.get(t.date) ?? { total: 0, completed: 0 };
+    dateMap.set(t.date, {
+      total: existing.total + 1,
+      completed: existing.completed + (t.completed ? 1 : 0),
+    });
+  });
+  const result = new Set<string>();
+  dateMap.forEach((v, k) => {
+    if (v.total > 0 && v.completed === v.total) result.add(k);
+  });
+  return result;
+}
+
+/** Consecutive due-days completed; skips days the daily isn't scheduled. Today counts if done, but never breaks the streak if not done yet. */
+export function computeDailyStreak(daily: Daily, now: Date = new Date()): number {
+  let streak = 0;
+  const d = new Date(now);
+  const dueOn = (dt: Date) => daily.targetDays.includes(dt.getDay());
+  const doneOn = (dt: Date) => daily.completedDates.includes(toLocalDateStr(dt));
+  if (dueOn(d) && doneOn(d)) streak++;
+  d.setDate(d.getDate() - 1);
+  for (let i = 0; i < 3650; i++) {
+    if (dueOn(d)) {
+      if (!doneOn(d)) break;
+      streak++;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+/** Consecutive days completed. Today counts if done, but never breaks the streak if not done yet. */
+export function computeHabitStreak(habit: Habit, now: Date = new Date()): number {
+  let streak = 0;
+  const d = new Date(now);
+  if (!habit.completedDates.includes(toLocalDateStr(d))) d.setDate(d.getDate() - 1);
+  while (streak < 3650) {
+    if (!habit.completedDates.includes(toLocalDateStr(d))) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+/**
+ * Dates (today onward) the native midnight re-lock should arm for: days with
+ * an incomplete locking to-do, plus days an all-day locking daily is due.
+ * Timed dailies are excluded — computePendingTimedLockDates handles those,
+ * since they need to re-lock at their own start time, not at midnight.
+ */
+export function computePendingLockDates(tasks: Task[], dailies: Daily[], today: string, now: Date = new Date()): string[] {
+  const dates = new Set(
+    tasks.filter(t => t.isLocking && !t.completed && t.date >= today).map(t => t.date),
+  );
+  const allDayLocking = dailies.filter(d => d.isLocking && !d.time);
+  for (let i = 0; i < 14; i++) {
+    const dt = new Date(now);
+    dt.setDate(dt.getDate() + i);
+    const ds = toLocalDateStr(dt);
+    if (allDayLocking.some(d => d.targetDays.includes(dt.getDay()) && !d.completedDates.includes(ds))) {
+      dates.add(ds);
+    }
+  }
+  return [...dates].sort();
+}
+
+/**
+ * For each distinct start time among timed locking dailies, the dates
+ * (today onward) it should re-arm for — i.e. at least one daily due at that
+ * time isn't completed yet. Keyed by "HH:MM" to match Daily.time, so the
+ * native layer can register one repeating schedule per time-of-day.
+ */
+export function computePendingTimedLockDates(dailies: Daily[], now: Date = new Date()): Record<string, string[]> {
+  const byTime = new Map<string, Daily[]>();
+  for (const d of dailies.filter(d => d.isLocking && d.time)) {
+    const list = byTime.get(d.time!) ?? [];
+    list.push(d);
+    byTime.set(d.time!, list);
+  }
+  const result: Record<string, string[]> = {};
+  byTime.forEach((ds, time) => {
+    const dates: string[] = [];
+    for (let i = 0; i < 14; i++) {
+      const dt = new Date(now);
+      dt.setDate(dt.getDate() + i);
+      const dateStr = toLocalDateStr(dt);
+      if (ds.some(d => d.targetDays.includes(dt.getDay()) && !d.completedDates.includes(dateStr))) {
+        dates.push(dateStr);
+      }
+    }
+    if (dates.length > 0) result[time] = dates;
+  });
+  return result;
+}
+
+export function computeLast7Days(now: Date = new Date()): string[] {
+  const days: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    days.push(toLocalDateStr(d));
+  }
+  return days;
+}

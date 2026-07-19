@@ -1,80 +1,86 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Task, Habit, BlockedApp, Priority } from '../types';
+import type { Task, Habit, Daily, Priority } from '../types';
+import { localToday } from '../lib/date';
+import { usePersisted } from './usePersisted';
+import {
+  minutesOfDay,
+  computeLockState,
+  computeCompletedDates,
+  computeDailyStreak,
+  computeHabitStreak,
+  computePendingLockDates,
+  computePendingTimedLockDates,
+  computeLast7Days,
+} from '../lib/storeLogic';
 
-function useLocalStorage<T>(key: string, initialValue: T): [T, (v: T | ((p: T) => T)) => void] {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? (JSON.parse(item) as T) : initialValue;
-    } catch {
-      return initialValue;
-    }
-  });
-
-  useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  }, [key, value]);
-
-  return [value, setValue];
+function uid(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export function useStore() {
-  const today = new Date().toISOString().split('T')[0];
+  const [today, setToday] = useState(localToday);
+  const [nowMinutes, setNowMinutes] = useState(() => minutesOfDay(new Date()));
 
-  const [tasks, setTasks] = useLocalStorage<Task[]>('tl_tasks', [
-    { id: '1', title: 'Morning workout', completed: false, date: today, priority: 'high', isLocking: true },
-    { id: '2', title: 'Read for 30 minutes', completed: false, date: today, priority: 'medium', isLocking: false },
-    { id: '3', title: 'Review project proposal', completed: false, date: today, priority: 'high', isLocking: true },
-    { id: '4', title: 'Reply to emails', completed: false, date: today, priority: 'low', isLocking: false },
-    { id: '5', title: 'Meditate 10 min', completed: false, date: today, priority: 'medium', isLocking: false },
-  ]);
+  // Roll "today" over at midnight and tick the clock while the app stays
+  // open, re-checking on foreground. This is what re-arms the blocker for a
+  // new day and triggers timed dailies at their start time.
+  useEffect(() => {
+    const check = () => {
+      setToday(prev => {
+        const now = localToday();
+        return now === prev ? prev : now;
+      });
+      setNowMinutes(prev => {
+        const now = minutesOfDay(new Date());
+        return now === prev ? prev : now;
+      });
+    };
+    const id = setInterval(check, 30_000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, []);
 
-  const [habits, setHabits] = useLocalStorage<Habit[]>('tl_habits', [
-    { id: '1', title: 'Morning workout', emoji: '💪', completedDates: [], color: '#FF6B35', targetDays: [1, 2, 3, 4, 5] },
-    { id: '2', title: 'Read 30 min', emoji: '📚', completedDates: [], color: '#4F9EF8', targetDays: [0, 1, 2, 3, 4, 5, 6] },
-    { id: '3', title: 'Meditate', emoji: '🧘', completedDates: [], color: '#A78BFA', targetDays: [0, 1, 2, 3, 4, 5, 6] },
-    { id: '4', title: 'No social media', emoji: '📵', completedDates: [], color: '#34D399', targetDays: [1, 2, 3, 4, 5] },
-  ]);
-
-  const [blockedApps, setBlockedApps] = useLocalStorage<BlockedApp[]>('tl_blocked', [
-    { id: '1', name: 'Instagram', icon: '📸', url: 'https://instagram.com' },
-    { id: '2', name: 'Twitter / X', icon: '🐦', url: 'https://x.com' },
-    { id: '3', name: 'YouTube', icon: '▶️', url: 'https://youtube.com' },
-    { id: '4', name: 'TikTok', icon: '🎵', url: 'https://tiktok.com' },
-    { id: '5', name: 'Reddit', icon: '🟠', url: 'https://reddit.com' },
-  ]);
+  const [tasks, setTasks, tasksReady] = usePersisted<Task[]>('tl_tasks', []);
+  const [habits, setHabits, habitsReady] = usePersisted<Habit[]>('tl_habits', []);
+  const [dailies, setDailies, dailiesReady] = usePersisted<Daily[]>('tl_dailies', []);
+  /** True once tasks/habits/dailies have loaded from disk — gate rendering on this to avoid a flash of the empty default before real data arrives. */
+  const ready = tasksReady && habitsReady && dailiesReady;
 
   const [selectedDate, setSelectedDate] = useState(today);
 
-  const lockingTasksToday = tasks.filter(t => t.date === today && t.isLocking);
-  const allLockingDone = lockingTasksToday.length === 0 || lockingTasksToday.every(t => t.completed);
-  const lockingLeft = lockingTasksToday.filter(t => !t.completed).length;
+  const isDailyDoneToday = useCallback(
+    (d: Daily) => d.completedDates.includes(today),
+    [today],
+  );
+
+  // "now" only needs to be precise to the minute here (nowMinutes already
+  // ticks independently), so today at nowMinutes is a faithful stand-in for
+  // computeLockState's reference Date.
+  const referenceNow = new Date();
+  referenceNow.setHours(Math.floor(nowMinutes / 60), nowMinutes % 60, 0, 0);
+  const lockState = computeLockState(tasks, dailies, today, referenceNow);
+  const { dueDailies, gatingDailies, nextGate, lockingLeft, allLockingDone, hasLockingToday } = lockState;
 
   const todayTasks = tasks.filter(t => t.date === selectedDate);
   const completedToday = todayTasks.filter(t => t.completed).length;
 
-  const getCompletedDates = useCallback((): Set<string> => {
-    const dateMap = new Map<string, { total: number; completed: number }>();
-    tasks.forEach(t => {
-      const existing = dateMap.get(t.date) ?? { total: 0, completed: 0 };
-      dateMap.set(t.date, {
-        total: existing.total + 1,
-        completed: existing.completed + (t.completed ? 1 : 0),
-      });
-    });
-    const result = new Set<string>();
-    dateMap.forEach((v, k) => {
-      if (v.total > 0 && v.completed === v.total) result.add(k);
-    });
-    return result;
-  }, [tasks]);
+  const getCompletedDates = useCallback((): Set<string> => computeCompletedDates(tasks), [tasks]);
 
   const addTask = useCallback((title: string, priority: Priority, isLocking: boolean) => {
     setTasks(prev => [
       ...(Array.isArray(prev) ? prev : []),
-      { id: Date.now().toString(), title, completed: false, date: selectedDate, priority, isLocking },
+      { id: uid(), title, completed: false, date: selectedDate, priority, isLocking },
     ]);
   }, [selectedDate, setTasks]);
+
+  const editTask = useCallback((id: string, updates: { title: string; priority: Priority; isLocking: boolean }) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, ...updates } : t));
+  }, [setTasks]);
 
   const toggleTask = useCallback((id: string) => {
     setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, completed: !t.completed } : t));
@@ -98,67 +104,93 @@ export function useStore() {
   const addHabit = useCallback((title: string, emoji: string, color: string, targetDays: number[]) => {
     setHabits(prev => [
       ...(Array.isArray(prev) ? prev : []),
-      { id: Date.now().toString(), title, emoji, completedDates: [], color, targetDays },
+      { id: uid(), title, emoji, completedDates: [], color, targetDays },
     ]);
+  }, [setHabits]);
+
+  const editHabit = useCallback((id: string, updates: { title: string; emoji: string; color: string; targetDays: number[] }) => {
+    setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => h.id === id ? { ...h, ...updates } : h));
   }, [setHabits]);
 
   const deleteHabit = useCallback((id: string) => {
     setHabits(prev => (Array.isArray(prev) ? prev : []).filter(h => h.id !== id));
   }, [setHabits]);
 
-  const addBlockedApp = useCallback((name: string, icon: string, url: string) => {
-    setBlockedApps(prev => [
+  const addDaily = useCallback((daily: Omit<Daily, 'id' | 'completedDates'>) => {
+    setDailies(prev => [
       ...(Array.isArray(prev) ? prev : []),
-      { id: Date.now().toString(), name, icon, url },
+      { ...daily, id: uid(), completedDates: [] },
     ]);
-  }, [setBlockedApps]);
+  }, [setDailies]);
 
-  const removeBlockedApp = useCallback((id: string) => {
-    setBlockedApps(prev => (Array.isArray(prev) ? prev : []).filter(a => a.id !== id));
-  }, [setBlockedApps]);
+  const toggleDaily = useCallback((id: string) => {
+    setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => {
+      if (d.id !== id) return d;
+      const done = d.completedDates.includes(today);
+      return {
+        ...d,
+        completedDates: done ? d.completedDates.filter(x => x !== today) : [...d.completedDates, today],
+      };
+    }));
+  }, [today, setDailies]);
 
-  const getStreak = useCallback((habit: Habit): number => {
-    let streak = 0;
-    const d = new Date();
-    while (streak < 365) {
-      const dateStr = d.toISOString().split('T')[0];
-      if (!habit.completedDates.includes(dateStr)) break;
-      streak++;
-      d.setDate(d.getDate() - 1);
-    }
-    return streak;
-  }, []);
+  const editDaily = useCallback((id: string, updates: Omit<Daily, 'id' | 'completedDates'>) => {
+    setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => d.id === id ? { ...d, ...updates } : d));
+  }, [setDailies]);
 
-  const getLast7Days = useCallback((): string[] => {
-    const days: string[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push(d.toISOString().split('T')[0]);
-    }
-    return days;
-  }, []);
+  const deleteDaily = useCallback((id: string) => {
+    setDailies(prev => (Array.isArray(prev) ? prev : []).filter(d => d.id !== id));
+  }, [setDailies]);
+
+  const getDailyStreak = useCallback((daily: Daily): number => computeDailyStreak(daily), []);
+
+  const getPendingLockDates = useCallback(
+    (): string[] => computePendingLockDates(tasks, dailies, today),
+    [tasks, dailies, today],
+  );
+
+  const getPendingTimedLockDates = useCallback(
+    (): Record<string, string[]> => computePendingTimedLockDates(dailies),
+    [dailies],
+  );
+
+  const getStreak = useCallback((habit: Habit): number => computeHabitStreak(habit), []);
+
+  const getLast7Days = useCallback((): string[] => computeLast7Days(), []);
 
   return {
+    ready,
     tasks,
     habits,
-    blockedApps,
+    dailies,
+    dueDailies,
+    gatingDailies,
+    nextGate,
+    isDailyDoneToday,
     selectedDate,
     setSelectedDate,
     today,
     allLockingDone,
     lockingLeft,
+    hasLockingToday,
     todayTasks,
     completedToday,
     getCompletedDates,
+    getPendingLockDates,
+    getPendingTimedLockDates,
     addTask,
+    editTask,
     toggleTask,
     deleteTask,
     toggleHabit,
     addHabit,
+    editHabit,
     deleteHabit,
-    addBlockedApp,
-    removeBlockedApp,
+    addDaily,
+    editDaily,
+    toggleDaily,
+    deleteDaily,
+    getDailyStreak,
     getStreak,
     getLast7Days,
   };
