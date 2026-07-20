@@ -156,6 +156,59 @@ export function computePendingTimedLockDates(dailies: Daily[], now: Date = new D
   return result;
 }
 
+/** Incomplete to-dos dated strictly before today, oldest first. */
+export function computeOverdueTasks(tasks: Task[], today: string): Task[] {
+  return tasks
+    .filter(t => !t.completed && t.date < today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Reorder `tasks` so the ones named in `orderedIds` take that relative order,
+ * while every other task keeps its exact position. This lets the view reorder
+ * just the visible subset (one day's incomplete tasks) without disturbing how
+ * other days' tasks are stored.
+ */
+export function reorderByIds(tasks: Task[], orderedIds: string[]): Task[] {
+  const idSet = new Set(orderedIds);
+  const queue = orderedIds
+    .map(id => tasks.find(t => t.id === id))
+    .filter((t): t is Task => t !== undefined);
+  let qi = 0;
+  return tasks.map(t => (idSet.has(t.id) && qi < queue.length ? queue[qi++] : t));
+}
+
+export interface WeeklyStats {
+  /** Oldest first, ending today. */
+  days: { date: string; tasks: number; dailies: number; habits: number; total: number }[];
+  totalCompletions: number;
+  /** Highest current streak across all dailies and habits. */
+  bestStreak: number;
+  /** Days (of the last 7) with at least one completion. */
+  activeDays: number;
+}
+
+/** Completion counts over the last 7 calendar days, for the stats card. */
+export function computeWeeklyStats(tasks: Task[], dailies: Daily[], habits: Habit[], now: Date = new Date()): WeeklyStats {
+  const days = computeLast7Days(now).map(date => {
+    const t = tasks.filter(x => x.date === date && x.completed).length;
+    const d = dailies.filter(x => x.completedDates.includes(date)).length;
+    const h = habits.filter(x => x.completedDates.includes(date)).length;
+    return { date, tasks: t, dailies: d, habits: h, total: t + d + h };
+  });
+  const bestStreak = Math.max(
+    0,
+    ...dailies.map(d => computeDailyStreak(d, now)),
+    ...habits.map(h => computeHabitStreak(h, now)),
+  );
+  return {
+    days,
+    totalCompletions: days.reduce((sum, d) => sum + d.total, 0),
+    bestStreak,
+    activeDays: days.filter(d => d.total > 0).length,
+  };
+}
+
 export function computeLast7Days(now: Date = new Date()): string[] {
   const days: string[] = [];
   for (let i = 6; i >= 0; i--) {

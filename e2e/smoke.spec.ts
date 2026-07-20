@@ -147,6 +147,81 @@ test.describe('editing', () => {
   });
 });
 
+test.describe('task list interactions', () => {
+  test('an overdue task surfaces on today and moves back with one tap', async ({ page }) => {
+    await skipOnboarding(page);
+
+    // Add a task dated yesterday by selecting it on the calendar strip.
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    const label = yest.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    await page.getByRole('button', { name: label }).click();
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Yesterday chore');
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+
+    await page.getByRole('button', { name: 'Back to today' }).click();
+    await expect(page.getByText('Overdue · 1')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Move "Yesterday chore" to today' }).click();
+    await expect(page.getByText(/Overdue ·/)).not.toBeVisible();
+    await expect(page.getByText('Yesterday chore')).toBeVisible();
+  });
+
+  test('tasks can be reordered by dragging the grip handle', async ({ page }) => {
+    await skipOnboarding(page);
+    for (const title of ['First task', 'Second task']) {
+      await page.getByRole('button', { name: 'Add Task' }).first().click();
+      await page.getByPlaceholder('What needs to be done?').fill(title);
+      await page.getByRole('button', { name: 'Add Task' }).last().click();
+    }
+
+    const grip = page.getByRole('button', { name: 'Reorder "Second task"' });
+    const from = (await grip.boundingBox())!;
+    const to = (await page.getByRole('button', { name: 'Reorder "First task"' }).boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2, to.y, { steps: 8 });
+    await page.mouse.up();
+
+    const titles = await page.locator('[data-task-row] span.truncate').allTextContents();
+    expect(titles.indexOf('Second task')).toBeLessThan(titles.indexOf('First task'));
+
+    // The order survives a reload — it's persisted, not just visual.
+    await page.reload();
+    const titlesAfter = await page.locator('[data-task-row] span.truncate').allTextContents();
+    expect(titlesAfter.indexOf('Second task')).toBeLessThan(titlesAfter.indexOf('First task'));
+  });
+});
+
+test('emergency pass pauses the lock and counts down', async ({ page }) => {
+  await skipOnboarding(page);
+  await page.getByRole('button', { name: 'Add Task' }).first().click();
+  await page.getByPlaceholder('What needs to be done?').fill('Locked task');
+  await page.getByText('Make this a locking task').click();
+  await page.getByRole('button', { name: 'Add Task' }).last().click();
+
+  await page.getByRole('button', { name: 'Blocker' }).click();
+  page.once('dialog', dialog => {
+    expect(dialog.message()).toContain('one emergency pass per day');
+    dialog.accept();
+  });
+  await page.getByRole('button', { name: /Emergency pass/ }).click();
+  await expect(page.getByText(/apps lock again in/)).toBeVisible();
+});
+
+test('weekly stats card counts completions', async ({ page }) => {
+  await skipOnboarding(page);
+  await page.getByRole('button', { name: 'Add Task' }).first().click();
+  await page.getByPlaceholder('What needs to be done?').fill('Counted task');
+  await page.getByRole('button', { name: 'Add Task' }).last().click();
+  await page.getByRole('button', { name: 'Mark "Counted task" as done' }).click();
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByText('Done this week')).toBeVisible();
+  await expect(page.getByRole('img', { name: /Completions per day this week: 0, 0, 0, 0, 0, 0, 1/ })).toBeVisible();
+});
+
 test.describe('settings', () => {
   test('shows the on-device privacy note and export/import rows', async ({ page }) => {
     await skipOnboarding(page);

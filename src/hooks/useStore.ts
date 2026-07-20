@@ -11,7 +11,19 @@ import {
   computePendingLockDates,
   computePendingTimedLockDates,
   computeLast7Days,
+  computeOverdueTasks,
+  computeWeeklyStats,
+  reorderByIds,
 } from '../lib/storeLogic';
+
+const EMERGENCY_PASS_MINUTES = 5;
+
+interface EmergencyPass {
+  /** Local date the pass was used — it's one per day. */
+  date: string;
+  /** Epoch ms when the shield comes back. */
+  expiresAt: number;
+}
 
 function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -90,6 +102,23 @@ export function useStore() {
     setTasks(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
   }, [setTasks]);
 
+  const overdueTasks = computeOverdueTasks(tasks, today);
+
+  const moveTaskToToday = useCallback((id: string) => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, date: today } : t));
+  }, [today, setTasks]);
+
+  const moveAllOverdueToToday = useCallback(() => {
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(
+      t => !t.completed && t.date < today ? { ...t, date: today } : t,
+    ));
+  }, [today, setTasks]);
+
+  /** Persist a manual order for the given ids; other tasks keep their positions. */
+  const reorderTasks = useCallback((orderedIds: string[]) => {
+    setTasks(prev => reorderByIds(Array.isArray(prev) ? prev : [], orderedIds));
+  }, [setTasks]);
+
   const toggleHabit = useCallback((id: string) => {
     setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => {
       if (h.id !== id) return h;
@@ -158,6 +187,37 @@ export function useStore() {
 
   const getLast7Days = useCallback((): string[] => computeLast7Days(), []);
 
+  const getWeeklyStats = useCallback(
+    () => computeWeeklyStats(tasks, dailies, habits),
+    [tasks, dailies, habits],
+  );
+
+  // ---- Emergency pass: pause the shield for a few minutes, once per day ----
+  const [emergencyPass, setEmergencyPass] = usePersisted<EmergencyPass | null>('tl_emergency_pass', null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // Tick every second only while a pass is running, so the countdown updates
+  // and `emergencyActive` flips off (re-locking apps) the moment it expires.
+  useEffect(() => {
+    if (!emergencyPass || emergencyPass.expiresAt <= Date.now()) return;
+    setNowMs(Date.now());
+    const id = setInterval(() => {
+      setNowMs(Date.now());
+      if (Date.now() >= emergencyPass.expiresAt) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [emergencyPass]);
+
+  const emergencyActive = !!emergencyPass && emergencyPass.expiresAt > nowMs;
+  const emergencyUsedToday = emergencyPass?.date === today;
+  const emergencySecondsLeft = emergencyActive ? Math.ceil((emergencyPass!.expiresAt - nowMs) / 1000) : 0;
+
+  const startEmergencyPass = useCallback(() => {
+    if (emergencyPass?.date === today) return; // once per day, no exceptions
+    setNowMs(Date.now());
+    setEmergencyPass({ date: today, expiresAt: Date.now() + EMERGENCY_PASS_MINUTES * 60_000 });
+  }, [emergencyPass, today, setEmergencyPass]);
+
   return {
     ready,
     tasks,
@@ -182,6 +242,17 @@ export function useStore() {
     editTask,
     toggleTask,
     deleteTask,
+    overdueTasks,
+    moveTaskToToday,
+    moveAllOverdueToToday,
+    reorderTasks,
+    getWeeklyStats,
+    emergencyActive,
+    emergencyUsedToday,
+    emergencySecondsLeft,
+    startEmergencyPass,
+    emergencyPassMinutes: EMERGENCY_PASS_MINUTES,
+    emergencyPassExpiresAt: emergencyActive ? emergencyPass!.expiresAt : null,
     toggleHabit,
     addHabit,
     editHabit,

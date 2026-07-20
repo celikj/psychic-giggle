@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Lock, CheckCircle2, Circle, X } from 'lucide-react';
+import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Priority, Task } from '../types';
 import CalendarStrip from './CalendarStrip';
-import ConfirmDeleteButton from './ConfirmDeleteButton';
+import ConfirmDeleteButton, { confirmDelete } from './ConfirmDeleteButton';
+import EditButton from './EditButton';
+import SwipeableRow from './SwipeableRow';
 import { hapticTick } from '../lib/haptics';
 
 interface Props {
@@ -20,6 +22,7 @@ export default function TasksView({ store }: Props) {
   const {
     todayTasks, completedToday, selectedDate, setSelectedDate, today,
     allLockingDone, lockingLeft, addTask, editTask, toggleTask, deleteTask, getCompletedDates,
+    overdueTasks, moveTaskToToday, moveAllOverdueToToday, reorderTasks,
   } = store;
 
   const [showAdd, setShowAdd] = useState(false);
@@ -63,11 +66,68 @@ export default function TasksView({ store }: Props) {
   const circumference = 2 * Math.PI * 16;
   const strokeDash = (pct / 100) * circumference;
 
-  const sorted = [...todayTasks].sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    const rank: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
-    return rank[a.priority] - rank[b.priority];
-  });
+  // Manual order: the stored array order is the user's order (drag to change),
+  // with completed tasks sinking to the bottom. Priority stays visible as the
+  // colored grip but no longer forces a sort.
+  const incomplete = todayTasks.filter(t => !t.completed);
+  const done = todayTasks.filter(t => t.completed);
+  const sorted = [...incomplete, ...done];
+
+  // ---- Drag-to-reorder (via the grip handle, incomplete tasks only) ----
+  const [drag, setDrag] = useState<{ id: string; from: number; to: number; dy: number; height: number } | null>(null);
+  const dragRef = useRef<typeof drag>(null);
+  const setDragBoth = (d: typeof drag) => { dragRef.current = d; setDrag(d); };
+
+  const handleDragStart = (e: React.PointerEvent, id: string, index: number) => {
+    e.preventDefault();
+    const handle = e.currentTarget as HTMLElement;
+    const row = handle.closest('[data-task-row]') as HTMLElement | null;
+    const height = (row?.offsetHeight ?? 64) + 8; // + space-y-2 gap
+    const startY = e.clientY;
+    const baseIds = incomplete.map(t => t.id);
+    handle.setPointerCapture(e.pointerId);
+    setDragBoth({ id, from: index, to: index, dy: 0, height });
+
+    const onMove = (ev: PointerEvent) => {
+      const dy = ev.clientY - startY;
+      const cur = dragRef.current;
+      if (!cur) return;
+      const to = Math.min(baseIds.length - 1, Math.max(0, cur.from + Math.round(dy / height)));
+      setDragBoth({ ...cur, dy, to });
+    };
+    const finish = () => {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', finish);
+      handle.removeEventListener('pointercancel', finish);
+      const cur = dragRef.current;
+      if (cur && cur.to !== cur.from) {
+        const ids = [...baseIds];
+        const [moved] = ids.splice(cur.from, 1);
+        ids.splice(cur.to, 0, moved);
+        hapticTick();
+        reorderTasks(ids);
+      }
+      setDragBoth(null);
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+  };
+
+  /** Visual displacement while dragging: the grabbed row follows the pointer, rows between origin and target shift out of the way. */
+  const dragStyle = (index: number): React.CSSProperties => {
+    if (!drag) return {};
+    if (index === drag.from) {
+      return { transform: `translateY(${drag.dy}px)`, zIndex: 20, position: 'relative', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' };
+    }
+    if (drag.from < drag.to && index > drag.from && index <= drag.to) {
+      return { transform: `translateY(-${drag.height}px)`, transition: 'transform 0.15s ease' };
+    }
+    if (drag.from > drag.to && index >= drag.to && index < drag.from) {
+      return { transform: `translateY(${drag.height}px)`, transition: 'transform 0.15s ease' };
+    }
+    return { transition: 'transform 0.15s ease' };
+  };
 
   const completedDates = getCompletedDates();
   const taskDates = new Set(store.tasks.map(t => t.date));
@@ -129,7 +189,50 @@ export default function TasksView({ store }: Props) {
 
       {/* Task list */}
       <div className="px-4 mt-2 space-y-2">
-        {sorted.length === 0 && !showAdd && (
+        {/* Overdue: incomplete to-dos from past days would otherwise silently vanish */}
+        {selectedDate === today && overdueTasks.length > 0 && (
+          <div className="pb-1">
+            <div className="flex items-center justify-between px-1 mb-2">
+              <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-wider">
+                Overdue · {overdueTasks.length}
+              </p>
+              {overdueTasks.length > 1 && (
+                <button onClick={moveAllOverdueToToday} className="text-[11px] font-semibold text-[#FF6B35]">
+                  Move all to today
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {overdueTasks.map(task => (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-3 p-3.5 rounded-2xl border border-amber-500/15 bg-amber-500/[0.04]"
+                >
+                  <div className="w-1 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: PRIORITY_COLOR[task.priority] }} />
+                  <div className="flex-1 min-w-0">
+                    <span className="truncate block text-sm font-medium text-white/80">{task.title}</span>
+                    <span className="text-[10px] text-amber-400/60 font-medium">
+                      {new Date(task.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => moveTaskToToday(task.id)}
+                    aria-label={`Move "${task.title}" to today`}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-[#FF6B35] bg-[#FF6B35]/10 border border-[#FF6B35]/25 rounded-lg px-2 py-1 active:scale-95 transition-transform flex-shrink-0"
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5" /> Today
+                  </button>
+                  <ConfirmDeleteButton
+                    label={`Delete overdue task "${task.title}"`}
+                    onConfirm={() => deleteTask(task.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {sorted.length === 0 && !showAdd && !(selectedDate === today && overdueTasks.length > 0) && (
           <div className="text-center py-14 animate-slide-up">
             <div className="text-5xl mb-3">📋</div>
             <p className="text-white/30 text-sm font-medium">No tasks yet</p>
@@ -138,58 +241,76 @@ export default function TasksView({ store }: Props) {
         )}
 
         {sorted.map((task, i) => (
-          <div
-            key={task.id}
-            className={`flex items-center gap-3 p-4 rounded-2xl border transition-all duration-300 animate-slide-in ${
-              task.completed
-                ? 'bg-white/[0.02] border-white/5 opacity-50'
-                : 'bg-[#141417] border-white/[0.07] active:scale-[0.98]'
-            }`}
-            style={{ animationDelay: `${i * 30}ms` }}
-          >
-            {/* Priority bar */}
-            <div
-              className="w-1 h-7 rounded-full flex-shrink-0 transition-all duration-300"
-              style={{ backgroundColor: task.completed ? 'transparent' : PRIORITY_COLOR[task.priority] }}
-            />
-
-            {/* Checkbox */}
-            <button
-              onClick={() => { hapticTick(); toggleTask(task.id); }}
-              aria-label={task.completed ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
-              className="flex-shrink-0 transition-transform active:scale-90"
+          <div key={task.id} style={dragStyle(i)}>
+            <SwipeableRow
+              disabled={!!drag}
+              onSwipeRight={() => { hapticTick(); toggleTask(task.id); }}
+              onSwipeLeft={() => confirmDelete(task.isLocking && !task.completed, () => deleteTask(task.id))}
+              rightHint={<CheckCircle2 className="w-5 h-5 text-green-400" />}
+              leftHint={<Trash2 className="w-5 h-5 text-red-400" />}
             >
-              {task.completed
-                ? <CheckCircle2 className="w-5 h-5 text-green-400" />
-                : <Circle className="w-5 h-5 text-white/25" />
-              }
-            </button>
+              <div
+                data-task-row
+                className={`flex items-center gap-2.5 p-4 rounded-2xl border transition-colors duration-300 animate-slide-in ${
+                  task.completed
+                    ? 'bg-white/[0.02] border-white/5 opacity-50'
+                    : 'bg-[#141417] border-white/[0.07]'
+                }`}
+                style={{ animationDelay: `${i * 30}ms` }}
+              >
+                {/* Grip: drag to reorder (incomplete only), tinted by priority */}
+                {task.completed ? (
+                  <div className="w-4 flex-shrink-0" />
+                ) : (
+                  <button
+                    onPointerDown={e => handleDragStart(e, task.id, i)}
+                    aria-label={`Reorder "${task.title}"`}
+                    className="flex-shrink-0 -ml-1 py-2 cursor-grab active:cursor-grabbing"
+                    style={{ touchAction: 'none' }}
+                  >
+                    <GripVertical className="w-4 h-4" style={{ color: PRIORITY_COLOR[task.priority] }} />
+                  </button>
+                )}
 
-            {/* Title — tap to edit */}
-            <button
-              onClick={() => startEdit(task)}
-              aria-label={`Edit "${task.title}"`}
-              className={`flex-1 text-left text-sm font-medium leading-snug min-w-0 ${
-                task.completed ? 'text-white/30 line-through' : 'text-white'
-              }`}
-            >
-              <span className="truncate block">{task.title}</span>
-            </button>
+                {/* Checkbox */}
+                <button
+                  onClick={() => { hapticTick(); toggleTask(task.id); }}
+                  aria-label={task.completed ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
+                  className="flex-shrink-0 transition-transform active:scale-90"
+                >
+                  {task.completed
+                    ? <CheckCircle2 className="w-5 h-5 text-green-400" />
+                    : <Circle className="w-5 h-5 text-white/25" />
+                  }
+                </button>
 
-            {/* Lock tag */}
-            {task.isLocking && !task.completed && (
-              <div className="flex items-center gap-1 bg-red-500/15 border border-red-500/25 px-2 py-0.5 rounded-lg flex-shrink-0">
-                <Lock className="w-3 h-3 text-red-400" />
-                <span className="text-[10px] font-semibold text-red-400">Lock</span>
+                {/* Title — tap to edit */}
+                <button
+                  onClick={() => startEdit(task)}
+                  aria-label={`Edit "${task.title}"`}
+                  className={`flex-1 text-left text-sm font-medium leading-snug min-w-0 ${
+                    task.completed ? 'text-white/30 line-through' : 'text-white'
+                  }`}
+                >
+                  <span className="truncate block">{task.title}</span>
+                </button>
+
+                {/* Lock tag */}
+                {task.isLocking && !task.completed && (
+                  <div className="flex items-center gap-1 bg-red-500/15 border border-red-500/25 px-2 py-0.5 rounded-lg flex-shrink-0">
+                    <Lock className="w-3 h-3 text-red-400" />
+                    <span className="text-[10px] font-semibold text-red-400">Lock</span>
+                  </div>
+                )}
+
+                <EditButton label={`Edit task "${task.title}"`} onClick={() => startEdit(task)} />
+                <ConfirmDeleteButton
+                  label={`Delete "${task.title}"`}
+                  warnLocking={task.isLocking && !task.completed}
+                  onConfirm={() => deleteTask(task.id)}
+                />
               </div>
-            )}
-
-            {/* Delete */}
-            <ConfirmDeleteButton
-              label={`Delete "${task.title}"`}
-              warnLocking={task.isLocking && !task.completed}
-              onConfirm={() => deleteTask(task.id)}
-            />
+            </SwipeableRow>
           </div>
         ))}
 

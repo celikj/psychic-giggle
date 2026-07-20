@@ -8,6 +8,8 @@ const isNative = Capacitor.isNativePlatform();
 
 /** Fixed id for tonight's "still locked" nudge — at most one is ever pending. */
 const EVENING_NUDGE_ID = 2_000_000_000;
+/** Fixed id for the "emergency pass ended" note — at most one is ever pending. */
+const EMERGENCY_END_ID = 2_000_000_001;
 const REMINDER_LEAD_MINUTES = 15;
 
 /** Deterministic 0..99,999,999 id from a daily's uuid, so re-syncing reschedules the same slot instead of piling up duplicates. */
@@ -72,7 +74,7 @@ export function useNotifications() {
   }, [setEnabledPersisted]);
 
   /** Rebuilds every notification this app owns from the current app state. */
-  const resync = useCallback(async (dailies: Daily[], hasOpenLockTonight: boolean) => {
+  const resync = useCallback(async (dailies: Daily[], hasOpenLockTonight: boolean, emergencyPassExpiresAt?: number | null) => {
     if (!isNative) return;
     try {
       const { LocalNotifications } = await import('@capacitor/local-notifications');
@@ -114,6 +116,17 @@ export function useNotifications() {
             schedule: { at },
           });
         }
+      }
+
+      // Fires even if the app is closed when the pass runs out, so the
+      // re-lock isn't silent.
+      if (emergencyPassExpiresAt && emergencyPassExpiresAt > Date.now()) {
+        notifications.push({
+          id: EMERGENCY_END_ID,
+          title: 'Emergency pass ended',
+          body: 'Your apps are locked again — finish your locking items to unlock.',
+          schedule: { at: new Date(emergencyPassExpiresAt) },
+        });
       }
 
       if (notifications.length) await LocalNotifications.schedule({ notifications });

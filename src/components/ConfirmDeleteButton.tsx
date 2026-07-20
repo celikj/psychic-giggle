@@ -9,16 +9,19 @@ interface Props {
   warnLocking?: boolean;
 }
 
+/** The confirm-then-delete flow, shared by the button and swipe-to-delete. */
+export function confirmDelete(warnLocking: boolean | undefined, onConfirm: () => void) {
+  const message = warnLocking
+    ? "This is locking your apps right now — deleting it unlocks them without finishing it. Delete anyway?"
+    : "Delete this? This can't be undone.";
+  if (window.confirm(message)) {
+    hapticDelete();
+    onConfirm();
+  }
+}
+
 export default function ConfirmDeleteButton({ label, onConfirm, warnLocking }: Props) {
-  const handleClick = () => {
-    const message = warnLocking
-      ? "This is locking your apps right now — deleting it unlocks them without finishing it. Delete anyway?"
-      : "Delete this? This can't be undone.";
-    if (window.confirm(message)) {
-      hapticDelete();
-      onConfirm();
-    }
-  };
+  const handleClick = () => confirmDelete(warnLocking, onConfirm);
 
   return (
     <button
