@@ -192,12 +192,18 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
                 />
               </div>
 
-              {/* Last 7 days */}
               <div className="flex gap-1.5 mt-3 pt-3 border-t border-white/5">
                 {last7.map(dateStr => {
                   const done = habit.completedDates.includes(dateStr);
+                  const frozen = habit.frozenDates?.includes(dateStr) && !done;
                   const isToday2 = dateStr === today;
                   const d = new Date(dateStr + 'T00:00:00');
+                  
+                  // Base color
+                  let bgColor = 'rgba(255,255,255,0.06)';
+                  if (done) bgColor = habit.color;
+                  if (frozen) bgColor = 'rgba(56, 189, 248, 0.2)'; // Tailwind sky-400 with opacity
+                  
                   return (
                     <div key={dateStr} className="flex-1 flex flex-col items-center gap-1">
                       <span className="text-[9px] text-white/20 font-medium">
@@ -206,13 +212,14 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
                       <div
                         className="w-5 h-5 rounded-full flex items-center justify-center transition-all"
                         style={{
-                          backgroundColor: done ? habit.color : 'rgba(255,255,255,0.06)',
+                          backgroundColor: bgColor,
                           boxShadow: isToday2
-                            ? `0 0 0 1.5px ${done ? habit.color : 'rgba(255,255,255,0.25)'}`
+                            ? `0 0 0 1.5px ${done ? habit.color : (frozen ? '#38bdf8' : 'rgba(255,255,255,0.25)')}`
                             : undefined,
                         }}
                       >
                         {done && <span className="text-[9px] text-white font-bold">✓</span>}
+                        {frozen && <span className="text-[9px] text-sky-400 font-bold">❄</span>}
                       </div>
                     </div>
                   );

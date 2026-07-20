@@ -48,6 +48,75 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.allLockingDone, store.emergencyActive, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
 
+  // Streak Insurance: Reset freezes on new month, auto-apply on day tick
+  useEffect(() => {
+    if (!ready || !monetization.isReady) return;
+    
+    const currentMonth = store.today.substring(0, 7);
+    if (store.freezeMonth !== currentMonth) {
+      store.resetFreezesForNewMonth(currentMonth);
+    }
+    
+    // Auto-apply logic: if there is inventory, look at yesterday
+    const isPremium = monetization.tier === 'premium';
+    const inventory = Math.max(0, (isPremium ? 3 : 1) - store.freezesUsed);
+    if (inventory > 0) {
+      const yesterday = new Date(store.today + 'T12:00:00Z');
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = yesterday.toISOString().split('T')[0];
+      
+      let freezesLeft = inventory;
+      
+      // Check habits
+      for (const h of store.habits) {
+        if (freezesLeft <= 0) break;
+        const done = h.completedDates.includes(yStr);
+        const frozen = h.frozenDates?.includes(yStr);
+        // Only freeze if they have a streak worth saving
+        // A simple heuristic: if they completed it the day BEFORE yesterday, freeze it.
+        const dayBefore = new Date(yesterday);
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        const dbStr = dayBefore.toISOString().split('T')[0];
+        const dbDone = h.completedDates.includes(dbStr);
+        const dbFrozen = h.frozenDates?.includes(dbStr);
+        
+        if (!done && !frozen && (dbDone || dbFrozen)) {
+          store.applyFreeze('habit', h.id, yStr);
+          store.incrementFreezesUsed();
+          freezesLeft--;
+        }
+      }
+      
+      // Check dailies
+      for (const d of store.dailies) {
+        if (freezesLeft <= 0) break;
+        const due = d.targetDays.includes(yesterday.getDay());
+        if (!due) continue;
+        
+        const done = d.completedDates.includes(yStr);
+        const frozen = d.frozenDates?.includes(yStr);
+        
+        // Find previous due date
+        const prevDue = new Date(yesterday);
+        prevDue.setDate(prevDue.getDate() - 1);
+        for (let i=0; i<7; i++) {
+          if (d.targetDays.includes(prevDue.getDay())) break;
+          prevDue.setDate(prevDue.getDate() - 1);
+        }
+        const pStr = prevDue.toISOString().split('T')[0];
+        const pdDone = d.completedDates.includes(pStr);
+        const pdFrozen = d.frozenDates?.includes(pStr);
+        
+        if (!done && !frozen && (pdDone || pdFrozen)) {
+          store.applyFreeze('daily', d.id, yStr);
+          store.incrementFreezesUsed();
+          freezesLeft--;
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, store.today, store.freezeMonth]);
+
   // Tell the native layer which days (today or later) still have incomplete
   // locking to-dos or all-day locking dailies, so the midnight DeviceActivity
   // schedule can re-lock apps for a new day even if TaskLock is never opened.

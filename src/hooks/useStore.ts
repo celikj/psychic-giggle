@@ -62,8 +62,12 @@ export function useStore() {
   const [tasks, setTasks, tasksReady] = usePersisted<Task[]>('tl_tasks', []);
   const [habits, setHabits, habitsReady] = usePersisted<Habit[]>('tl_habits', []);
   const [dailies, setDailies, dailiesReady] = usePersisted<Daily[]>('tl_dailies', []);
+  
+  const [freezesUsed, setFreezesUsed, freezesReady] = usePersisted<number>('tl_freezes_used', 0);
+  const [freezeMonth, setFreezeMonth] = usePersisted<string>('tl_freeze_month', today.substring(0, 7));
+  
   /** True once tasks/habits/dailies have loaded from disk — gate rendering on this to avoid a flash of the empty default before real data arrives. */
-  const ready = tasksReady && habitsReady && dailiesReady;
+  const ready = tasksReady && habitsReady && dailiesReady && freezesReady;
 
   const [strictEnabled, setStrictEnabled] = usePersisted<boolean>('tl_strict', false);
 
@@ -187,6 +191,35 @@ export function useStore() {
     }));
   }, [today, setDailies]);
 
+  const applyFreeze = useCallback((type: 'daily' | 'habit', id: string, date: string) => {
+    if (type === 'daily') {
+      setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => {
+        if (d.id === id) {
+          telemetry.track('applyFreeze', { type: 'daily' });
+          return { ...d, frozenDates: [...(d.frozenDates || []), date] };
+        }
+        return d;
+      }));
+    } else {
+      setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => {
+        if (h.id === id) {
+          telemetry.track('applyFreeze', { type: 'habit' });
+          return { ...h, frozenDates: [...(h.frozenDates || []), date] };
+        }
+        return h;
+      }));
+    }
+  }, [setDailies, setHabits]);
+
+  const incrementFreezesUsed = useCallback(() => {
+    setFreezesUsed(prev => prev + 1);
+  }, [setFreezesUsed]);
+
+  const resetFreezesForNewMonth = useCallback((newMonth: string) => {
+    setFreezeMonth(newMonth);
+    setFreezesUsed(0);
+  }, [setFreezeMonth, setFreezesUsed]);
+
   const editDaily = useCallback((id: string, updates: Omit<Daily, 'id' | 'completedDates'>) => {
     setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => d.id === id ? { ...d, ...updates } : d));
   }, [setDailies]);
@@ -288,6 +321,11 @@ export function useStore() {
     addHabit,
     editHabit,
     deleteHabit,
+    applyFreeze,
+    freezesUsed,
+    incrementFreezesUsed,
+    freezeMonth,
+    resetFreezesForNewMonth,
     addDaily,
     editDaily,
     toggleDaily,

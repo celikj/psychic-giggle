@@ -220,6 +220,25 @@ describe('computeDailyStreak', () => {
     // the unscheduled day is skipped over rather than breaking the count.
     expect(computeDailyStreak(d, NOW)).toBe(6);
   });
+
+  it('counts frozen dates as maintaining the streak', () => {
+    // Mon, Tue, Wed (0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed)
+    // We'll mock now to be Wed (2026-07-22 is a Wednesday)
+    const mockNow = new Date('2026-07-22T12:00:00Z');
+    
+    const d = daily({ 
+      targetDays: [1, 2, 3], 
+      completedDates: ['2026-07-20'], // Mon
+      frozenDates: ['2026-07-21'] // Tue
+    });
+    
+    // Wed is due, but not done yet. So streak should be Mon(done) + Tue(frozen) = 2.
+    expect(computeDailyStreak(d, mockNow)).toBe(2);
+    
+    // If we freeze Wed too
+    const d2 = { ...d, frozenDates: ['2026-07-21', '2026-07-22'] };
+    expect(computeDailyStreak(d2, mockNow)).toBe(3);
+  });
 });
 
 describe('computeHabitStreak', () => {
@@ -240,6 +259,21 @@ describe('computeHabitStreak', () => {
   it('a gap breaks the streak', () => {
     const h = habit({ completedDates: [TODAY, daysAgo(1), daysAgo(3)] });
     expect(computeHabitStreak(h, NOW)).toBe(2);
+  });
+
+  it('counts frozen dates as maintaining the streak', () => {
+    const mockNow = new Date('2026-07-22T12:00:00Z'); // Wed
+    
+    const h = habit({
+      completedDates: ['2026-07-20'], // Mon
+      frozenDates: ['2026-07-21'] // Tue
+    });
+    // Wed is not done yet. So streak is Mon(done) + Tue(frozen) = 2.
+    expect(computeHabitStreak(h, mockNow)).toBe(2);
+    
+    // If we freeze Wed too
+    const h2 = { ...h, frozenDates: ['2026-07-21', '2026-07-22'] };
+    expect(computeHabitStreak(h2, mockNow)).toBe(3);
   });
 });
 
@@ -416,6 +450,8 @@ describe('computeStrictState', () => {
       ...overrides,
     };
   }
+
+
 
   it('all controls are enabled when strict mode is off', () => {
     const state = computeStrictState(

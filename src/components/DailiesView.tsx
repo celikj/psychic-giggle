@@ -197,19 +197,26 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
             const d = new Date(dateStr + 'T00:00:00');
             const scheduled = daily.targetDays.includes(d.getDay());
             const dayDone = daily.completedDates.includes(dateStr);
+            const frozen = daily.frozenDates?.includes(dateStr) && !dayDone;
             const isToday = dateStr === today;
+            
+            let bgColor = scheduled ? 'rgba(255,255,255,0.06)' : 'transparent';
+            if (dayDone) bgColor = '#FF6B35';
+            if (frozen) bgColor = 'rgba(56, 189, 248, 0.2)';
+
             return (
               <div key={dateStr} className="flex-1 flex flex-col items-center gap-1">
                 <span className="text-[9px] text-white/20 font-medium">{DAY_LABELS[d.getDay()]}</span>
                 <div
                   className="w-5 h-5 rounded-full flex items-center justify-center"
                   style={{
-                    backgroundColor: dayDone ? '#FF6B35' : scheduled ? 'rgba(255,255,255,0.06)' : 'transparent',
-                    border: scheduled ? 'none' : '1px dashed rgba(255,255,255,0.08)',
-                    boxShadow: isToday ? '0 0 0 1.5px rgba(255,255,255,0.25)' : undefined,
+                    backgroundColor: bgColor,
+                    border: scheduled || frozen ? 'none' : '1px dashed rgba(255,255,255,0.08)',
+                    boxShadow: isToday ? `0 0 0 1.5px ${dayDone ? '#FF6B35' : (frozen ? '#38bdf8' : 'rgba(255,255,255,0.25)')}` : undefined,
                   }}
                 >
                   {dayDone && <span className="text-[9px] text-white font-bold">✓</span>}
+                  {frozen && <span className="text-[9px] text-sky-400 font-bold">❄</span>}
                 </div>
               </div>
             );

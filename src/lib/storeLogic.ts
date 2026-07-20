@@ -74,17 +74,21 @@ export function computeCompletedDates(tasks: Task[]): Set<string> {
   return result;
 }
 
-/** Consecutive due-days completed; skips days the daily isn't scheduled. Today counts if done, but never breaks the streak if not done yet. */
+/** Consecutive due-days completed; skips days the daily isn't scheduled. Today counts if done or frozen, but never breaks the streak if not done yet. */
 export function computeDailyStreak(daily: Daily, now: Date = new Date()): number {
   let streak = 0;
   const d = new Date(now);
   const dueOn = (dt: Date) => daily.targetDays.includes(dt.getDay());
+  
+  const ds = toLocalDateStr(d);
   const doneOn = (dt: Date) => daily.completedDates.includes(toLocalDateStr(dt));
-  if (dueOn(d) && doneOn(d)) streak++;
+  const frozenOn = (dt: Date) => daily.frozenDates?.includes(toLocalDateStr(dt));
+  
+  if (dueOn(d) && (doneOn(d) || frozenOn(d))) streak++;
   d.setDate(d.getDate() - 1);
   for (let i = 0; i < 3650; i++) {
     if (dueOn(d)) {
-      if (!doneOn(d)) break;
+      if (!doneOn(d) && !frozenOn(d)) break;
       streak++;
     }
     d.setDate(d.getDate() - 1);
@@ -92,13 +96,22 @@ export function computeDailyStreak(daily: Daily, now: Date = new Date()): number
   return streak;
 }
 
-/** Consecutive days completed. Today counts if done, but never breaks the streak if not done yet. */
+/** Consecutive days completed or frozen. Today counts if done/frozen, but never breaks the streak if not done yet. */
 export function computeHabitStreak(habit: Habit, now: Date = new Date()): number {
   let streak = 0;
   const d = new Date(now);
-  if (!habit.completedDates.includes(toLocalDateStr(d))) d.setDate(d.getDate() - 1);
+  
+  const ds = toLocalDateStr(d);
+  const doneToday = habit.completedDates.includes(ds);
+  const frozenToday = habit.frozenDates?.includes(ds);
+  
+  if (!doneToday && !frozenToday) d.setDate(d.getDate() - 1);
+  
   while (streak < 3650) {
-    if (!habit.completedDates.includes(toLocalDateStr(d))) break;
+    const pds = toLocalDateStr(d);
+    const done = habit.completedDates.includes(pds);
+    const frozen = habit.frozenDates?.includes(pds);
+    if (!done && !frozen) break;
     streak++;
     d.setDate(d.getDate() - 1);
   }

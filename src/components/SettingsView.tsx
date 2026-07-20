@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays } from 'lucide-react';
 import type { NotificationsController } from '../hooks/useNotifications';
 import type { Store } from '../hooks/useStore';
+import { useMonetization } from '../hooks/useMonetization';
 import { shareBackup, pickAndRestoreBackup } from '../lib/backup';
 import pkgJson from '../../package.json';
 
@@ -140,6 +141,7 @@ function ToggleRow({
 export default function SettingsView({ store, notif, onShowIntro }: Props) {
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const monetization = useMonetization();
 
   const handleExport = async () => {
     setBusy('export');
@@ -184,6 +186,24 @@ export default function SettingsView({ store, notif, onShowIntro }: Props) {
       <div className="px-4 space-y-2">
         <SectionLabel>This Week</SectionLabel>
         <WeeklyStatsCard store={store} />
+
+        <SectionLabel>Streak Insurance</SectionLabel>
+        <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <RowIcon><Flame className="w-5 h-5 text-orange-400" /></RowIcon>
+            <div>
+              <p className="text-sm font-semibold text-white">Streak Freezes</p>
+              <p className="text-xs text-white/40 mt-0.5">Automatically rescues a missed day</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-bold text-white">
+              {Math.max(0, (monetization.tier === 'premium' ? 3 : 1) - store.freezesUsed)}
+              <span className="text-white/40 font-medium"> / {monetization.tier === 'premium' ? 3 : 1}</span>
+            </p>
+            <p className="text-[10px] text-white/40 mt-0.5 uppercase tracking-wider">Remaining</p>
+          </div>
+        </div>
 
         <SectionLabel>Getting Started</SectionLabel>
         <Row
