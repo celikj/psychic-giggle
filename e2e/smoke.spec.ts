@@ -2,7 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 
 async function skipOnboarding(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  // First run also offers the starter-routine questions; dismiss those too.
+  await page.getByRole('button', { name: 'Skip for now' }).click();
 }
 
 test.describe('onboarding', () => {
@@ -14,10 +16,35 @@ test.describe('onboarding', () => {
       await page.getByRole('button', { name: 'Next' }).click();
     }
     await page.getByRole('button', { name: 'Get Started' }).click();
+
+    // The intro hands off to the starter-routine questions on first run.
+    await expect(page.getByText('Build your routine')).toBeVisible();
+    await page.getByRole('button', { name: 'Skip for now' }).click();
     await expect(page.getByText('No tasks yet')).toBeVisible();
 
     await page.reload();
     await expect(page.getByText('Welcome to TaskLock')).not.toBeVisible();
+    await expect(page.getByText('Build your routine')).not.toBeVisible();
+  });
+
+  test('starter questions add the selected dailies with their times', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page.getByText('Build your routine')).toBeVisible();
+
+    // "Brush your teeth before bed?" is preselected; say yes to one more.
+    await expect(page.getByRole('button', { name: 'Brush your teeth before bed?' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Make your bed in the morning?' }).click();
+    await page.getByRole('button', { name: 'Add 2 dailies' }).click();
+
+    await page.getByRole('button', { name: 'Dailies' }).click();
+    await expect(page.getByText('Brush teeth')).toBeVisible();
+    await expect(page.getByText('Make the bed')).toBeVisible();
+    await expect(page.getByText('Locks from 9:30 PM')).toBeVisible();
+
+    // One-shot: never comes back, even after replaying the intro.
+    await page.reload();
+    await expect(page.getByText('Build your routine')).not.toBeVisible();
   });
 
   test('Settings > Replay the intro shows it again', async ({ page }) => {
@@ -143,7 +170,9 @@ test.describe('editing', () => {
       dialog.accept();
     });
     await page.getByRole('button', { name: 'Delete "Edited title"' }).click();
-    await expect(page.getByText('Edited title')).not.toBeVisible();
+    // Soft delete: the row is gone, and a 5-second undo toast appears.
+    await expect(page.getByRole('button', { name: 'Delete "Edited title"' })).toHaveCount(0);
+    await expect(page.getByText('Deleted Edited title')).toBeVisible();
   });
 });
 
@@ -245,3 +274,108 @@ test('data survives a reload', async ({ page }) => {
   await page.reload();
   await expect(page.getByText('Persisted task')).toBeVisible();
 });
+
+test.describe('strict mode', () => {
+  test('disables the blocker toggle and prevents deleting locking items', async ({ page }) => {
+    await skipOnboarding(page);
+    
+    // Add a locking task
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Strict task');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    // Enable strict mode in the Blocker tab
+    await page.getByRole('button', { name: 'Blocker' }).click();
+    
+    page.once('dialog', dialog => {
+      expect(dialog.message()).toContain('Strict Mode');
+      dialog.accept();
+    });
+    await page.getByRole('button', { name: 'Toggle strict mode' }).click();
+    
+    // Verify it's active
+    await expect(page.getByText('Active — controls locked until tasks done')).toBeVisible();
+    
+    // Go back to tasks and try to delete the locking task
+    await page.getByRole('button', { name: 'To-Dos' }).click();
+    
+    page.once('dialog', dialog => {
+      expect(dialog.message()).toContain('Strict Mode is active');
+      dialog.accept();
+    });
+    await page.getByRole('button', { name: 'Delete "Strict task"' }).click();
+    // Task should still be there
+    await expect(page.getByText('Strict task')).toBeVisible();
+    
+    // Complete the task
+    await page.getByRole('button', { name: 'Mark "Strict task" as done' }).click();
+    
+    // Go back to Blocker, strict mode should be lifted
+    await page.getByRole('button', { name: 'Blocker' }).click();
+    await expect(page.getByText('Armed — activates when locking items are pending')).toBeVisible();
+  });
+});
+
+test.describe('paywall', () => {
+  test('free tier limits daily and locking tasks', async ({ page }) => {
+    await skipOnboarding(page);
+    
+    // Web mocks natively to free tier initially. 
+    // 1. Try to add 3 locking dailies
+    await page.getByRole('button', { name: 'Dailies' }).click();
+    
+    // Add Locking Daily 1
+    await page.getByRole('button', { name: 'Add Daily' }).first().click();
+    await page.getByPlaceholder('Daily routine name...').fill('Locking Daily 1');
+    await page.getByText('Make this a locking daily').click();
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    
+    // Add Locking Daily 2
+    await page.getByRole('button', { name: 'Add Daily' }).first().click();
+    await page.getByPlaceholder('Daily routine name...').fill('Locking Daily 2');
+    await page.getByText('Make this a locking daily').click();
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    
+    // Add Locking Daily 3 -> Should trigger paywall
+    await page.getByRole('button', { name: 'Add Daily' }).first().click();
+    await page.getByPlaceholder('Daily routine name...').fill('Paid Daily 3');
+    await page.getByText('Make this a locking daily').click();
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    
+    // Assert paywall is visible
+    await expect(page.getByText('TaskLock Premium')).toBeVisible();
+    await expect(page.getByText(/Free tier is limited to/)).toBeVisible();
+    
+    // "Purchase" the mock annual premium
+    await page.getByRole('button', { name: 'Annual Premium' }).click();
+    
+    // Paywall should close, and now we can add the 3rd daily
+    await expect(page.getByText('TaskLock Premium')).not.toBeVisible();
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    await expect(page.getByText('Paid Daily 3')).toBeVisible();
+    
+    // 2. Try locking tasks limit
+    await page.getByRole('button', { name: 'To-Dos' }).click();
+    // Since we purchased premium above, we shouldn't hit the limit of 2.
+    // Let's just create 3 locking tasks and it should succeed because we are premium.
+    
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Lock 1');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Lock 2');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Lock 3');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    await expect(page.getByText('Lock 3')).toBeVisible();
+  });
+});
+

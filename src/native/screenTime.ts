@@ -13,7 +13,7 @@ export interface ScreenTimePlugin {
   isSupported(): Promise<{ supported: boolean }>;
   getStatus(): Promise<ScreenTimeStatus>;
   requestAuthorization(): Promise<{ authorization: string }>;
-  selectApps(): Promise<{ count: number }>;
+  selectApps(options?: { type?: string }): Promise<{ count: number }>;
   startBlocking(): Promise<{ blocking: boolean }>;
   stopBlocking(): Promise<{ blocking: boolean }>;
   /**
@@ -40,6 +40,25 @@ export interface ScreenTimePlugin {
     allLockingDone: boolean;
     hasLockingToday: boolean;
   }): Promise<void>;
+  
+  startFocus(options: { id: string; endsAt: string }): Promise<{ success: boolean }>;
+  cancelFocus(options: { id: string }): Promise<{ success: boolean }>;
+  updateScheduledBlocks(options: {
+    enabled: boolean;
+    blocks: Array<{
+      id: string;
+      startTime: string;
+      endTime: string;
+      days: number[];
+      enabled: boolean;
+    }>;
+  }): Promise<{ success: boolean }>;
+  /**
+   * Natively enforce an emergency pass: after `durationMinutes`, the
+   * DeviceActivity monitor re-applies the shield even if the app was killed
+   * mid-pass.
+   */
+  startEmergencyPass(options: { durationMinutes: number }): Promise<{ success: boolean }>;
 }
 
 // Native impl lives in ios/App/App/ScreenTimePlugin.swift (Family Controls).

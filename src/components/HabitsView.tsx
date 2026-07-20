@@ -1,23 +1,30 @@
 import { useState } from 'react';
-import { Plus, Flame, X } from 'lucide-react';
+import { Plus, Flame, X, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Habit } from '../types';
+import type { MonetizationState } from '../hooks/useMonetization';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
+import ItemStatsModal from './ItemStatsModal';
 import { hapticTick } from '../lib/haptics';
 import { HABIT_TEMPLATES } from '../lib/templates';
 
-interface Props { store: Store }
+interface Props {
+  store: Store;
+  monetization: MonetizationState;
+  onShowPaywall: () => void;
+}
 
 const PRESET_COLORS = ['#FF6B35', '#4F9EF8', '#A78BFA', '#34D399', '#F472B6', '#FBBF24', '#F87171'];
 const PRESET_EMOJIS = ['💪', '📚', '🧘', '📵', '🏃', '💧', '🛌', '✍️', '🎯', '🥗', '🧹', '🎸'];
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-export default function HabitsView({ store }: Props) {
+export default function HabitsView({ store, monetization, onShowPaywall }: Props) {
   const { habits, today, toggleHabit, addHabit, editHabit, deleteHabit, getStreak, getLast7Days } = store;
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [statsItem, setStatsItem] = useState<Habit | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [color, setColor] = useState('#FF6B35');
@@ -180,6 +187,14 @@ export default function HabitsView({ store }: Props) {
                   <span className="text-base">{doneToday ? '✓' : '○'}</span>
                 </button>
 
+                <button
+                  onClick={() => setStatsItem(habit)}
+                  aria-label={`View stats for "${habit.title}"`}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                </button>
+
                 <EditButton label={`Edit habit "${habit.title}"`} onClick={() => startEdit(habit)} />
                 <ConfirmDeleteButton
                   label={`Delete habit "${habit.title}"`}
@@ -187,12 +202,18 @@ export default function HabitsView({ store }: Props) {
                 />
               </div>
 
-              {/* Last 7 days */}
               <div className="flex gap-1.5 mt-3 pt-3 border-t border-white/5">
                 {last7.map(dateStr => {
                   const done = habit.completedDates.includes(dateStr);
+                  const frozen = habit.frozenDates?.includes(dateStr) && !done;
                   const isToday2 = dateStr === today;
                   const d = new Date(dateStr + 'T00:00:00');
+                  
+                  // Base color
+                  let bgColor = 'rgba(255,255,255,0.06)';
+                  if (done) bgColor = habit.color;
+                  if (frozen) bgColor = 'rgba(56, 189, 248, 0.2)'; // Tailwind sky-400 with opacity
+                  
                   return (
                     <div key={dateStr} className="flex-1 flex flex-col items-center gap-1">
                       <span className="text-[9px] text-white/20 font-medium">
@@ -201,13 +222,14 @@ export default function HabitsView({ store }: Props) {
                       <div
                         className="w-5 h-5 rounded-full flex items-center justify-center transition-all"
                         style={{
-                          backgroundColor: done ? habit.color : 'rgba(255,255,255,0.06)',
+                          backgroundColor: bgColor,
                           boxShadow: isToday2
-                            ? `0 0 0 1.5px ${done ? habit.color : 'rgba(255,255,255,0.25)'}`
+                            ? `0 0 0 1.5px ${done ? habit.color : (frozen ? '#38bdf8' : 'rgba(255,255,255,0.25)')}`
                             : undefined,
                         }}
                       >
                         {done && <span className="text-[9px] text-white font-bold">✓</span>}
+                        {frozen && <span className="text-[9px] text-sky-400 font-bold">❄</span>}
                       </div>
                     </div>
                   );
@@ -328,6 +350,16 @@ export default function HabitsView({ store }: Props) {
             Add Habit
           </button>
         </div>
+      )}
+
+      {statsItem && (
+        <ItemStatsModal
+          item={statsItem}
+          today={today}
+          onClose={() => setStatsItem(null)}
+          isPremium={monetization.tier === 'premium'}
+          onShowPaywall={onShowPaywall}
+        />
       )}
     </div>
   );

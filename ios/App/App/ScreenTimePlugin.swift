@@ -35,6 +35,10 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "stopBlocking", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateSchedule", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateWidgetState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startEmergencyPass", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startFocus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cancelFocus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "updateScheduledBlocks", returnType: CAPPluginReturnPromise),
     ]
 
     private let selectionKey = "tasklock.familyActivitySelection"
@@ -114,19 +118,25 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func selectApps(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
+        // "focus" saves into a separate selection used only by focus sessions;
+        // everything else edits the main (tasks/scheduled-block) selection.
+        let key = (call.getString("type") == "focus")
+            ? TaskLockShared.focusSelectionKey
+            : TaskLockShared.selectionKey
         DispatchQueue.main.async {
-            let initial = self.loadSelection() ?? FamilyActivitySelection()
+            let initial = TaskLockShared.loadSelection(key: key) ?? FamilyActivitySelection()
             let picker = FamilyActivityPickerHost(selection: initial) { [weak self] result in
                 self?.bridge?.viewController?.dismiss(animated: true)
                 guard let self = self else { return }
                 if let result = result {
-                    TaskLockShared.saveSelection(result)
-                    if self.isShielded() {
-                        TaskLockShared.applyShield(result, to: self.managedStore) // keep an active shield in sync
+                    TaskLockShared.saveSelection(result, key: key)
+                    // Only the main selection drives the currently-active task shield.
+                    if key == TaskLockShared.selectionKey && self.isShielded() {
+                        TaskLockShared.applyShield(result, to: self.managedStore)
                     }
                     call.resolve(["count": self.selectionCount(result)])
                 } else {
-                    call.resolve(["count": self.loadSelection().map { self.selectionCount($0) } ?? 0])
+                    call.resolve(["count": TaskLockShared.loadSelection(key: key).map { self.selectionCount($0) } ?? 0])
                 }
             }
             let host = UIHostingController(rootView: picker)
@@ -137,6 +147,21 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         call.reject("Screen Time is unavailable on this platform.")
         #endif
     }
+
+    /// Re-apply the main task shield if today still has pending locking items,
+    /// otherwise clear it. Used when a focus session or scheduled block ends
+    /// from the app side, mirroring the monitor extension's intervalDidEnd.
+    #if canImport(FamilyControls)
+    private func restoreTaskShieldOrClear() {
+        let today = TaskLockShared.localDateString()
+        let pending = TaskLockShared.defaults?.stringArray(forKey: TaskLockShared.pendingDatesKey) ?? []
+        if pending.contains(today), let selection = loadSelection() {
+            TaskLockShared.applyShield(selection, to: managedStore)
+        } else {
+            clearShield()
+        }
+    }
+    #endif
 
     @objc func startBlocking(_ call: CAPPluginCall) {
         #if canImport(FamilyControls)
@@ -256,6 +281,129 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         WidgetCenter.shared.reloadAllTimelines()
         #endif
         call.resolve()
+    }
+
+    /// Start a focus session: shield the focus app selection immediately, and
+    /// register a one-shot DeviceActivity interval so the monitor lifts it at
+    /// `endsAt` even if the app is killed. (DeviceActivity intervals must be
+    /// ≥15 min; the 25/50/90-minute presets satisfy that.)
+    @objc func startFocus(_ call: CAPPluginCall) {
+        #if canImport(FamilyControls) && canImport(DeviceActivity)
+        guard let id = call.getString("id"), let endsAt = call.getString("endsAt") else {
+            call.reject("Missing focus session id or endsAt.")
+            return
+        }
+        guard let selection = TaskLockShared.loadSelection(key: TaskLockShared.focusSelectionKey),
+              selectionCount(selection) > 0 else {
+            call.reject("Pick at least one app for focus sessions first.")
+            return
+        }
+        TaskLockShared.applyShield(selection, to: managedStore)
+
+        let iso = ISO8601DateFormatter()
+        if let endDate = iso.date(from: endsAt) {
+            let cal = Calendar.current
+            let startComps = cal.dateComponents([.hour, .minute, .second], from: Date())
+            let endComps = cal.dateComponents([.hour, .minute, .second], from: endDate)
+            let schedule = DeviceActivitySchedule(intervalStart: startComps, intervalEnd: endComps, repeats: false)
+            let activity = DeviceActivityName(TaskLockShared.focusActivityName(for: id))
+            // If scheduling fails (e.g. interval < 15 min), the shield is still
+            // applied; the app's own timer lifts it while foregrounded.
+            try? DeviceActivityCenter().startMonitoring(activity, during: schedule)
+        }
+        call.resolve(["success": true])
+        #else
+        call.resolve(["success": false])
+        #endif
+    }
+
+    /// Cancel a running focus session: stop its schedule and restore whatever
+    /// the main task state calls for.
+    @objc func cancelFocus(_ call: CAPPluginCall) {
+        #if canImport(FamilyControls) && canImport(DeviceActivity)
+        if let id = call.getString("id") {
+            DeviceActivityCenter().stopMonitoring([DeviceActivityName(TaskLockShared.focusActivityName(for: id))])
+        }
+        restoreTaskShieldOrClear()
+        call.resolve(["success": true])
+        #else
+        call.resolve(["success": false])
+        #endif
+    }
+
+    /// Sync scheduled blocks to native. Each enabled block registers one
+    /// weekly-repeating DeviceActivity schedule per selected weekday; the
+    /// monitor extension applies the main shield for the window and lifts it
+    /// (or keeps the task shield, if tasks are still pending) at the end.
+    @objc func updateScheduledBlocks(_ call: CAPPluginCall) {
+        #if canImport(FamilyControls) && canImport(DeviceActivity)
+        let enabled = call.getBool("enabled") ?? true
+        let blocks = call.getArray("blocks", [String: Any].self) ?? []
+        let center = DeviceActivityCenter()
+
+        var desired: [DeviceActivityName: DeviceActivitySchedule] = [:]
+        if enabled {
+            for block in blocks {
+                guard let id = block["id"] as? String,
+                      (block["enabled"] as? Bool) ?? true,
+                      let startTime = block["startTime"] as? String,
+                      let endTime = block["endTime"] as? String,
+                      let start = TaskLockShared.hourMinute(from: startTime),
+                      let end = TaskLockShared.hourMinute(from: endTime) else { continue }
+                let days = (block["days"] as? [Int]) ?? []
+                let startMinutes = start.hour * 60 + start.minute
+                let endMinutes = end.hour * 60 + end.minute
+                for day in days {
+                    let name = DeviceActivityName(TaskLockShared.schedActivityName(for: id, day: day))
+                    var startComps = DateComponents()
+                    startComps.weekday = day + 1 // JS 0=Sun -> Apple 1=Sun
+                    startComps.hour = start.hour
+                    startComps.minute = start.minute
+                    var endComps = DateComponents()
+                    // A block ending at/before its start crosses midnight into the next day.
+                    endComps.weekday = endMinutes <= startMinutes ? ((day + 1) % 7) + 1 : day + 1
+                    endComps.hour = end.hour
+                    endComps.minute = end.minute
+                    desired[name] = DeviceActivitySchedule(intervalStart: startComps, intervalEnd: endComps, repeats: true)
+                }
+            }
+        }
+
+        let currentSched = center.activities.filter { $0.rawValue.hasPrefix("tasklock.sched.") }
+        let desiredNames = Set(desired.keys)
+        let toStop = currentSched.filter { !desiredNames.contains($0) }
+        if !toStop.isEmpty { center.stopMonitoring(toStop) }
+        for (name, schedule) in desired where !center.activities.contains(name) {
+            try? center.startMonitoring(name, during: schedule)
+        }
+        call.resolve(["success": true])
+        #else
+        call.resolve(["success": false])
+        #endif
+    }
+
+    /// Emergency pass: pause the shield now and schedule a native re-lock.
+    /// DeviceActivity intervals have a 15-minute floor; the pass is 15 min, so
+    /// the re-lock enforces even if the app is force-quit. (Shorter passes,
+    /// were they ever configured, would fall back to the app timer +
+    /// "pass ended" notification.)
+    @objc func startEmergencyPass(_ call: CAPPluginCall) {
+        #if canImport(FamilyControls) && canImport(DeviceActivity)
+        let minutes = call.getInt("durationMinutes") ?? 5
+        clearShield()
+        if minutes >= 15 {
+            let cal = Calendar.current
+            let now = Date()
+            let end = now.addingTimeInterval(Double(minutes) * 60)
+            let startComps = cal.dateComponents([.hour, .minute, .second], from: now)
+            let endComps = cal.dateComponents([.hour, .minute, .second], from: end)
+            let schedule = DeviceActivitySchedule(intervalStart: startComps, intervalEnd: endComps, repeats: false)
+            try? DeviceActivityCenter().startMonitoring(DeviceActivityName("tasklock.emergency"), during: schedule)
+        }
+        call.resolve(["success": true])
+        #else
+        call.resolve(["success": false])
+        #endif
     }
 }
 

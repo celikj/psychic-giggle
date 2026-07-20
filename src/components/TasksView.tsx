@@ -1,15 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck } from 'lucide-react';
+import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Priority, Task } from '../types';
+import type { MonetizationState } from '../hooks/useMonetization';
+import { canAddLockingTask, canMakeTaskLocking } from '../lib/monetization';
 import CalendarStrip from './CalendarStrip';
 import ConfirmDeleteButton, { confirmDelete } from './ConfirmDeleteButton';
 import EditButton from './EditButton';
 import SwipeableRow from './SwipeableRow';
 import { hapticTick } from '../lib/haptics';
+import { t } from '../lib/i18n';
 
 interface Props {
   store: Store;
+  monetization: MonetizationState;
+  onShowPaywall: () => void;
 }
 
 const PRIORITY_COLOR: Record<Priority, string> = {
@@ -18,7 +23,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   high: '#EF4444',
 };
 
-export default function TasksView({ store }: Props) {
+export default function TasksView({ store, monetization, onShowPaywall }: Props) {
   const {
     todayTasks, completedToday, selectedDate, setSelectedDate, today,
     allLockingDone, lockingLeft, addTask, editTask, toggleTask, deleteTask, getCompletedDates,
@@ -54,6 +59,21 @@ export default function TasksView({ store }: Props) {
 
   const handleSubmit = () => {
     if (!newTitle.trim()) return;
+    
+    if (newLocking) {
+      if (editingId) {
+        if (!canMakeTaskLocking(store.tasks, editingId, store.selectedDate, monetization.isPremium)) {
+          onShowPaywall();
+          return;
+        }
+      } else {
+        if (!canAddLockingTask(store.tasks, store.selectedDate, monetization.isPremium)) {
+          onShowPaywall();
+          return;
+        }
+      }
+    }
+
     if (editingId) {
       editTask(editingId, { title: newTitle.trim(), priority: newPriority, isLocking: newLocking });
     } else {
@@ -148,13 +168,13 @@ export default function TasksView({ store }: Props) {
               <div className={`w-2 h-2 rounded-full ${allLockingDone ? 'bg-green-400' : 'bg-red-400'}`} />
               <span className="text-xs font-semibold uppercase tracking-widest text-white/40">
                 {allLockingDone
-                  ? 'Apps Unlocked'
-                  : `${lockingLeft} left to unlock`}
+                  ? t(store.locale, 'appsUnlocked')
+                  : `${lockingLeft} ${t(store.locale, 'leftToUnlock')}`}
               </span>
             </div>
             <h1 className="text-3xl font-bold text-white">{formatHeaderDate()}</h1>
             <p className="text-white/30 text-sm mt-0.5">
-              {completedToday} / {todayTasks.length} tasks complete
+              {completedToday} / {todayTasks.length} {t(store.locale, 'tasksComplete')}
             </p>
           </div>
 
@@ -245,7 +265,11 @@ export default function TasksView({ store }: Props) {
             <SwipeableRow
               disabled={!!drag}
               onSwipeRight={() => { hapticTick(); toggleTask(task.id); }}
-              onSwipeLeft={() => confirmDelete(task.isLocking && !task.completed, () => deleteTask(task.id))}
+              onSwipeLeft={() => confirmDelete(
+                task.isLocking && !task.completed,
+                () => deleteTask(task.id),
+                task.isLocking && !task.completed && store.strictState.isActive ? true : undefined,
+              )}
               rightHint={<CheckCircle2 className="w-5 h-5 text-green-400" />}
               leftHint={<Trash2 className="w-5 h-5 text-red-400" />}
             >
@@ -307,6 +331,7 @@ export default function TasksView({ store }: Props) {
                 <ConfirmDeleteButton
                   label={`Delete "${task.title}"`}
                   warnLocking={task.isLocking && !task.completed}
+                  strictBlocked={task.isLocking && !task.completed && store.strictState.isActive}
                   onConfirm={() => deleteTask(task.id)}
                 />
               </div>
@@ -354,7 +379,17 @@ export default function TasksView({ store }: Props) {
 
             {/* Locking toggle */}
             <button
-              onClick={() => setNewLocking(v => !v)}
+              onClick={() => {
+                // When editing an existing locking task and strict is active, prevent un-marking isLocking
+                if (editingId && newLocking && store.strictState.isActive) {
+                  const existingTask = store.tasks.find(t => t.id === editingId);
+                  if (existingTask?.isLocking && !existingTask.completed) {
+                    window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
+                    return;
+                  }
+                }
+                setNewLocking(v => !v);
+              }}
               className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
                 newLocking
                   ? 'bg-red-500/15 border border-red-500/30 text-red-400'

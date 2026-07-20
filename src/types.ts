@@ -24,6 +24,7 @@ export interface Daily {
   /** Barcode that must be scanned with the camera to check this daily off. */
   barcode?: string;
   completedDates: string[];
+  frozenDates?: string[];
 }
 
 export interface Habit {
@@ -31,6 +32,7 @@ export interface Habit {
   title: string;
   emoji: string;
   completedDates: string[];
+  frozenDates?: string[];
   color: string;
   targetDays: number[];
 }

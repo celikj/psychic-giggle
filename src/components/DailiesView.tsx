@@ -1,14 +1,21 @@
 import { useState } from 'react';
-import { Plus, Flame, X, Lock, Clock, ScanBarcode } from 'lucide-react';
+import { Plus, Flame, X, Lock, Clock, ScanBarcode, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
+import type { MonetizationState } from '../hooks/useMonetization';
+import { canAddLockingDaily, canMakeDailyLocking, LIMITS } from '../lib/monetization';
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
+import ItemStatsModal from './ItemStatsModal';
 import { hapticTick } from '../lib/haptics';
 import { DAILY_TEMPLATES } from '../lib/templates';
 
-interface Props { store: Store }
+interface Props { 
+  store: Store;
+  monetization: MonetizationState;
+  onShowPaywall: () => void;
+}
 
 const PRESET_EMOJIS = ['🪥', '🧺', '🍽️', '💊', '🚿', '🐕', '🛏️', '🌱', '📖', '🏃', '🧹', '🎯'];
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -20,11 +27,12 @@ function formatTime(t: string): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function DailiesView({ store }: Props) {
+export default function DailiesView({ store, monetization, onShowPaywall }: Props) {
   const { dailies, today, toggleDaily, addDaily, editDaily, deleteDaily, getDailyStreak, getLast7Days } = store;
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [statsItem, setStatsItem] = useState<Daily | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [targetDays, setTargetDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
@@ -78,8 +86,16 @@ export default function DailiesView({ store }: Props) {
       barcode: barcode ?? undefined,
     };
     if (editingId) {
+      if (isLocking && !canMakeDailyLocking(store.dailies, editingId, monetization.isPremium)) {
+        onShowPaywall();
+        return;
+      }
       editDaily(editingId, payload);
     } else {
+      if (isLocking && !canAddLockingDaily(store.dailies, monetization.isPremium)) {
+        onShowPaywall();
+        return;
+      }
       addDaily(payload);
     }
     resetForm();
@@ -168,10 +184,19 @@ export default function DailiesView({ store }: Props) {
             </div>
           </button>
 
+          <button
+            onClick={() => setStatsItem(daily)}
+            aria-label={`View stats for "${daily.title}"`}
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+          </button>
+
           <EditButton label={`Edit daily "${daily.title}"`} onClick={() => startEdit(daily)} />
           <ConfirmDeleteButton
             label={`Delete daily "${daily.title}"`}
             warnLocking={due && daily.isLocking && !done}
+            strictBlocked={due && daily.isLocking && !done && store.strictState.isActive}
             onConfirm={() => deleteDaily(daily.id)}
           />
         </div>
@@ -182,19 +207,26 @@ export default function DailiesView({ store }: Props) {
             const d = new Date(dateStr + 'T00:00:00');
             const scheduled = daily.targetDays.includes(d.getDay());
             const dayDone = daily.completedDates.includes(dateStr);
+            const frozen = daily.frozenDates?.includes(dateStr) && !dayDone;
             const isToday = dateStr === today;
+            
+            let bgColor = scheduled ? 'rgba(255,255,255,0.06)' : 'transparent';
+            if (dayDone) bgColor = '#FF6B35';
+            if (frozen) bgColor = 'rgba(56, 189, 248, 0.2)';
+
             return (
               <div key={dateStr} className="flex-1 flex flex-col items-center gap-1">
                 <span className="text-[9px] text-white/20 font-medium">{DAY_LABELS[d.getDay()]}</span>
                 <div
                   className="w-5 h-5 rounded-full flex items-center justify-center"
                   style={{
-                    backgroundColor: dayDone ? '#FF6B35' : scheduled ? 'rgba(255,255,255,0.06)' : 'transparent',
-                    border: scheduled ? 'none' : '1px dashed rgba(255,255,255,0.08)',
-                    boxShadow: isToday ? '0 0 0 1.5px rgba(255,255,255,0.25)' : undefined,
+                    backgroundColor: bgColor,
+                    border: scheduled || frozen ? 'none' : '1px dashed rgba(255,255,255,0.08)',
+                    boxShadow: isToday ? `0 0 0 1.5px ${dayDone ? '#FF6B35' : (frozen ? '#38bdf8' : 'rgba(255,255,255,0.25)')}` : undefined,
                   }}
                 >
                   {dayDone && <span className="text-[9px] text-white font-bold">✓</span>}
+                  {frozen && <span className="text-[9px] text-sky-400 font-bold">❄</span>}
                 </div>
               </div>
             );
@@ -262,7 +294,13 @@ export default function DailiesView({ store }: Props) {
               {DAILY_TEMPLATES.map(t => (
                 <button
                   key={t.title}
-                  onClick={() => addDaily({ title: t.title, emoji: t.emoji, targetDays: t.targetDays, time: t.time, isLocking: t.isLocking })}
+                  onClick={() => {
+                    if (t.isLocking && !canAddLockingDaily(store.dailies, monetization.isPremium)) {
+                      onShowPaywall();
+                      return;
+                    }
+                    addDaily({ title: t.title, emoji: t.emoji, targetDays: t.targetDays, time: t.time, isLocking: t.isLocking });
+                  }}
                   className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
                 >
                   <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl flex-shrink-0">
@@ -378,7 +416,17 @@ export default function DailiesView({ store }: Props) {
 
             {/* Locking */}
             <button
-              onClick={() => setIsLocking(v => !v)}
+              onClick={() => {
+                // When editing an existing locking daily and strict is active, prevent un-marking isLocking
+                if (editingId && isLocking && store.strictState.isActive) {
+                  const existingDaily = store.dailies.find(d => d.id === editingId);
+                  if (existingDaily?.isLocking && !existingDaily.completedDates.includes(today)) {
+                    window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
+                    return;
+                  }
+                }
+                setIsLocking(v => !v);
+              }}
               className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
                 isLocking
                   ? 'bg-red-500/15 border border-red-500/30 text-red-400'
@@ -440,6 +488,16 @@ export default function DailiesView({ store }: Props) {
             Add Daily
           </button>
         </div>
+      )}
+
+      {statsItem && (
+        <ItemStatsModal
+          item={statsItem}
+          today={today}
+          onClose={() => setStatsItem(null)}
+          isPremium={monetization.tier === 'premium'}
+          onShowPaywall={onShowPaywall}
+        />
       )}
     </div>
   );

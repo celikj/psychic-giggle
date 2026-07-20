@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Task, Habit, Daily, Priority } from '../types';
+import { telemetry } from '../lib/telemetry';
 import { localToday } from '../lib/date';
 import { usePersisted } from './usePersisted';
+import type { FocusSession, ScheduledBlock } from '../lib/focusSessions';
+import { createFocusSession, computeActiveSchedules } from '../lib/focusSessions';
 import {
   minutesOfDay,
   computeLockState,
@@ -13,10 +16,15 @@ import {
   computeLast7Days,
   computeOverdueTasks,
   computeWeeklyStats,
+  computeStrictState,
   reorderByIds,
 } from '../lib/storeLogic';
+import { autoBackupToDocuments } from '../lib/backup';
+import { getDeviceLocale, type Locale } from '../lib/i18n';
 
-const EMERGENCY_PASS_MINUTES = 5;
+// 15 minutes is the floor DeviceActivity allows for a scheduled interval, so
+// at this length the native re-lock enforces even if the app is force-quit.
+const EMERGENCY_PASS_MINUTES = 15;
 
 interface EmergencyPass {
   /** Local date the pass was used — it's one per day. */
@@ -60,10 +68,45 @@ export function useStore() {
   const [tasks, setTasks, tasksReady] = usePersisted<Task[]>('tl_tasks', []);
   const [habits, setHabits, habitsReady] = usePersisted<Habit[]>('tl_habits', []);
   const [dailies, setDailies, dailiesReady] = usePersisted<Daily[]>('tl_dailies', []);
+  
+  const [freezesUsed, setFreezesUsed, freezesReady] = usePersisted<number>('tl_freezes_used', 0);
+  const [freezeMonth, setFreezeMonth] = usePersisted<string>('tl_freeze_month', today.substring(0, 7));
+  
+  const [focusSession, setFocusSession, focusReady] = usePersisted<FocusSession | null>('tl_focus', null);
+  const [scheduledBlocks, setScheduledBlocks, blocksReady] = usePersisted<ScheduledBlock[]>('tl_schedules', []);
+  const [lastBackup, setLastBackup, backupReady] = usePersisted<string | null>('tl_last_backup', null);
+
   /** True once tasks/habits/dailies have loaded from disk — gate rendering on this to avoid a flash of the empty default before real data arrives. */
-  const ready = tasksReady && habitsReady && dailiesReady;
+  const ready = tasksReady && habitsReady && dailiesReady && freezesReady && focusReady && blocksReady && backupReady;
+
+  const [strictEnabled, setStrictEnabled] = usePersisted<boolean>('tl_strict', false);
+
+  const [locale, setLocale] = usePersisted<Locale>('tl_locale', getDeviceLocale());
+
+  interface PendingDelete {
+    type: 'task' | 'habit' | 'daily';
+    item: any; // Task | Habit | Daily
+  }
+  const [pendingDeletes, setPendingDeletes] = useState<PendingDelete[]>([]);
 
   const [selectedDate, setSelectedDate] = useState(today);
+
+  // Auto-backup to Documents (iCloud)
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => {
+      autoBackupToDocuments({
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        tasks,
+        habits,
+        dailies
+      }).then(() => {
+        setLastBackup(new Date().toISOString());
+      });
+    }, 5000); // 5s debounce
+    return () => clearTimeout(t);
+  }, [tasks, habits, dailies, ready, setLastBackup]);
 
   const isDailyDoneToday = useCallback(
     (d: Daily) => d.completedDates.includes(today),
@@ -78,12 +121,16 @@ export function useStore() {
   const lockState = computeLockState(tasks, dailies, today, referenceNow);
   const { dueDailies, gatingDailies, nextGate, lockingLeft, allLockingDone, hasLockingToday } = lockState;
 
+  const activeSchedules = computeActiveSchedules(scheduledBlocks, referenceNow);
+  const isScheduleActive = activeSchedules.length > 0;
+
   const todayTasks = tasks.filter(t => t.date === selectedDate);
   const completedToday = todayTasks.filter(t => t.completed).length;
 
   const getCompletedDates = useCallback((): Set<string> => computeCompletedDates(tasks), [tasks]);
 
   const addTask = useCallback((title: string, priority: Priority, isLocking: boolean) => {
+    telemetry.track('addTask', { priority, isLocking: isLocking ? 'true' : 'false' });
     setTasks(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { id: uid(), title, completed: false, date: selectedDate, priority, isLocking },
@@ -95,11 +142,22 @@ export function useStore() {
   }, [setTasks]);
 
   const toggleTask = useCallback((id: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id === id) {
+        if (!t.completed) telemetry.track('completeTask', { isLocking: t.isLocking ? 'true' : 'false' });
+        return { ...t, completed: !t.completed };
+      }
+      return t;
+    }));
   }, [setTasks]);
 
   const deleteTask = useCallback((id: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
+    setTasks(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      const item = arr.find(t => t.id === id);
+      if (item) setPendingDeletes(pd => [...pd, { type: 'task', item }]);
+      return arr.filter(t => t.id !== id);
+    });
   }, [setTasks]);
 
   const overdueTasks = computeOverdueTasks(tasks, today);
@@ -119,18 +177,25 @@ export function useStore() {
     setTasks(prev => reorderByIds(Array.isArray(prev) ? prev : [], orderedIds));
   }, [setTasks]);
 
-  const toggleHabit = useCallback((id: string) => {
+  const toggleHabit = useCallback((id: string, overrideDate?: string) => {
+    const targetDate = overrideDate || today;
     setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => {
-      if (h.id !== id) return h;
-      const done = h.completedDates.includes(today);
-      return {
-        ...h,
-        completedDates: done ? h.completedDates.filter(d => d !== today) : [...h.completedDates, today],
-      };
+      if (h.id === id) {
+        const isDone = h.completedDates.includes(targetDate);
+        if (!isDone) telemetry.track('checkoffHabit');
+        return {
+          ...h,
+          completedDates: isDone
+            ? h.completedDates.filter(d => d !== targetDate)
+            : [...h.completedDates, targetDate],
+        };
+      }
+      return h;
     }));
   }, [today, setHabits]);
 
   const addHabit = useCallback((title: string, emoji: string, color: string, targetDays: number[]) => {
+    telemetry.track('addHabit');
     setHabits(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { id: uid(), title, emoji, completedDates: [], color, targetDays },
@@ -142,10 +207,16 @@ export function useStore() {
   }, [setHabits]);
 
   const deleteHabit = useCallback((id: string) => {
-    setHabits(prev => (Array.isArray(prev) ? prev : []).filter(h => h.id !== id));
+    setHabits(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      const item = arr.find(h => h.id === id);
+      if (item) setPendingDeletes(pd => [...pd, { type: 'habit', item }]);
+      return arr.filter(h => h.id !== id);
+    });
   }, [setHabits]);
 
   const addDaily = useCallback((daily: Omit<Daily, 'id' | 'completedDates'>) => {
+    telemetry.track('addDaily', { isLocking: daily.isLocking ? 'true' : 'false' });
     setDailies(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { ...daily, id: uid(), completedDates: [] },
@@ -154,21 +225,60 @@ export function useStore() {
 
   const toggleDaily = useCallback((id: string) => {
     setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => {
-      if (d.id !== id) return d;
-      const done = d.completedDates.includes(today);
-      return {
-        ...d,
-        completedDates: done ? d.completedDates.filter(x => x !== today) : [...d.completedDates, today],
-      };
+      if (d.id === id) {
+        const isDone = d.completedDates.includes(today);
+        if (!isDone) telemetry.track('checkoffDaily', { isLocking: d.isLocking ? 'true' : 'false' });
+        return {
+          ...d,
+          completedDates: isDone
+            ? d.completedDates.filter(dt => dt !== today)
+            : [...d.completedDates, today],
+        };
+      }
+      return d;
     }));
   }, [today, setDailies]);
+
+  const applyFreeze = useCallback((type: 'daily' | 'habit', id: string, date: string) => {
+    if (type === 'daily') {
+      setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => {
+        if (d.id === id) {
+          telemetry.track('applyFreeze', { type: 'daily' });
+          return { ...d, frozenDates: [...(d.frozenDates || []), date] };
+        }
+        return d;
+      }));
+    } else {
+      setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => {
+        if (h.id === id) {
+          telemetry.track('applyFreeze', { type: 'habit' });
+          return { ...h, frozenDates: [...(h.frozenDates || []), date] };
+        }
+        return h;
+      }));
+    }
+  }, [setDailies, setHabits]);
+
+  const incrementFreezesUsed = useCallback(() => {
+    setFreezesUsed(prev => prev + 1);
+  }, [setFreezesUsed]);
+
+  const resetFreezesForNewMonth = useCallback((newMonth: string) => {
+    setFreezeMonth(newMonth);
+    setFreezesUsed(0);
+  }, [setFreezeMonth, setFreezesUsed]);
 
   const editDaily = useCallback((id: string, updates: Omit<Daily, 'id' | 'completedDates'>) => {
     setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => d.id === id ? { ...d, ...updates } : d));
   }, [setDailies]);
 
   const deleteDaily = useCallback((id: string) => {
-    setDailies(prev => (Array.isArray(prev) ? prev : []).filter(d => d.id !== id));
+    setDailies(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      const item = arr.find(d => d.id === id);
+      if (item) setPendingDeletes(pd => [...pd, { type: 'daily', item }]);
+      return arr.filter(d => d.id !== id);
+    });
   }, [setDailies]);
 
   const getDailyStreak = useCallback((daily: Daily): number => computeDailyStreak(daily), []);
@@ -210,6 +320,10 @@ export function useStore() {
 
   const emergencyActive = !!emergencyPass && emergencyPass.expiresAt > nowMs;
   const emergencyUsedToday = emergencyPass?.date === today;
+
+  // Strict Mode — blocks bypass actions while locking items are pending.
+  // Must be after emergencyPass so we know whether the pass was used today.
+  const strictState = computeStrictState(strictEnabled, lockState, emergencyUsedToday);
   const emergencySecondsLeft = emergencyActive ? Math.ceil((emergencyPass!.expiresAt - nowMs) / 1000) : 0;
 
   const startEmergencyPass = useCallback(() => {
@@ -217,6 +331,32 @@ export function useStore() {
     setNowMs(Date.now());
     setEmergencyPass({ date: today, expiresAt: Date.now() + EMERGENCY_PASS_MINUTES * 60_000 });
   }, [emergencyPass, today, setEmergencyPass]);
+
+  const startFocus = useCallback((durationMins: number) => {
+    const session = createFocusSession(durationMins);
+    setFocusSession(session);
+    return session;
+  }, [setFocusSession]);
+
+  const cancelFocus = useCallback(() => {
+    setFocusSession(prev => prev ? { ...prev, completed: true } : null);
+  }, [setFocusSession]);
+
+  const addSchedule = useCallback((block: ScheduledBlock) => {
+    setScheduledBlocks(prev => [...prev, block]);
+  }, [setScheduledBlocks]);
+
+  const editSchedule = useCallback((id: string, updates: Partial<ScheduledBlock>) => {
+    setScheduledBlocks(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  }, [setScheduledBlocks]);
+
+  const deleteSchedule = useCallback((id: string) => {
+    setScheduledBlocks(prev => prev.filter(s => s.id !== id));
+  }, [setScheduledBlocks]);
+
+  const toggleSchedule = useCallback((id: string) => {
+    setScheduledBlocks(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
+  }, [setScheduledBlocks]);
 
   return {
     ready,
@@ -253,10 +393,18 @@ export function useStore() {
     startEmergencyPass,
     emergencyPassMinutes: EMERGENCY_PASS_MINUTES,
     emergencyPassExpiresAt: emergencyActive ? emergencyPass!.expiresAt : null,
+    strictEnabled,
+    setStrictEnabled,
+    strictState,
     toggleHabit,
     addHabit,
     editHabit,
     deleteHabit,
+    applyFreeze,
+    freezesUsed,
+    incrementFreezesUsed,
+    freezeMonth,
+    resetFreezesForNewMonth,
     addDaily,
     editDaily,
     toggleDaily,
@@ -264,6 +412,32 @@ export function useStore() {
     getDailyStreak,
     getStreak,
     getLast7Days,
+    focusSession,
+    startFocus,
+    cancelFocus,
+    scheduledBlocks,
+    isScheduleActive,
+    addSchedule,
+    editSchedule,
+    deleteSchedule,
+    toggleSchedule,
+    lastBackup,
+    locale,
+    setLocale,
+    pendingDeletes,
+    undoDelete: useCallback((item: any) => {
+      if (item.date && !item.targetDays) {
+        setTasks(prev => [...prev, item as Task]);
+      } else if (item.targetDays && typeof item.isLocking === 'boolean') {
+        setDailies(prev => [...prev, item as Daily]);
+      } else {
+        setHabits(prev => [...prev, item as Habit]);
+      }
+      setPendingDeletes(pd => pd.filter(p => p.item.id !== item.id));
+    }, [setTasks, setDailies, setHabits]),
+    commitDelete: useCallback((id: string) => {
+      setPendingDeletes(pd => pd.filter(p => p.item.id !== id));
+    }, []),
   };
 }
 
