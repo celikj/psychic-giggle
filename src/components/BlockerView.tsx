@@ -254,7 +254,7 @@ export default function BlockerView({ store, st }: Props) {
             {approved && (
               <div className="mt-4 space-y-3">
                 <button
-                  onClick={st.chooseApps}
+                  onClick={() => st.chooseApps('tasks')}
                   disabled={st.busy}
                   className={`w-full flex items-center justify-between py-3.5 px-4 rounded-xl active:scale-95 transition-transform disabled:opacity-50 ${
                     hasSelection ? 'bg-white/5 border border-white/10' : 'bg-[#FF6B35]'

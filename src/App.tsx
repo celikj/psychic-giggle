@@ -236,7 +236,6 @@ export default function App() {
 
       {paywallReason && (
         <PaywallView
-          store={store}
           monetization={monetization}
           reason={paywallReason}
           onClose={() => setPaywallReason(null)}
@@ -267,6 +266,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         allLockingDone={store.allLockingDone}
         lockingLeft={store.lockingLeft}
+        locale={store.locale}
       />
     </div>
   );

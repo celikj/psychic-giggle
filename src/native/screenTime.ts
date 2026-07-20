@@ -53,6 +53,12 @@ export interface ScreenTimePlugin {
       enabled: boolean;
     }>;
   }): Promise<{ success: boolean }>;
+  /**
+   * Natively enforce an emergency pass: after `durationMinutes`, the
+   * DeviceActivity monitor re-applies the shield even if the app was killed
+   * mid-pass.
+   */
+  startEmergencyPass(options: { durationMinutes: number }): Promise<{ success: boolean }>;
 }
 
 // Native impl lives in ios/App/App/ScreenTimePlugin.swift (Family Controls).

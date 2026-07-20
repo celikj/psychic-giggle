@@ -7,9 +7,11 @@ describe('monthlyStats', () => {
     const habit: Habit = {
       id: 'h1',
       title: 'Water',
+      emoji: '💧',
+      color: '#4F9EF8',
+      targetDays: [0, 1, 2, 3, 4, 5, 6],
       completedDates: [],
       frozenDates: [],
-      date: '2026-07-01'
     };
 
     const stats = computeItemMonthlyStats(habit, '2026-07');
@@ -26,6 +28,7 @@ describe('monthlyStats', () => {
     const daily: Daily = {
       id: 'd1',
       title: 'Gym',
+      emoji: '🏋️',
       targetDays: [1, 3, 5], // Mon, Wed, Fri
       completedDates: [
         '2026-07-01', // Wed (done)
@@ -40,7 +43,6 @@ describe('monthlyStats', () => {
         '2026-07-10'  // Fri (frozen)
       ],
       isLocking: false,
-      date: '2026-07-01'
     };
 
     const stats = computeItemMonthlyStats(daily, '2026-07');

@@ -170,7 +170,9 @@ test.describe('editing', () => {
       dialog.accept();
     });
     await page.getByRole('button', { name: 'Delete "Edited title"' }).click();
-    await expect(page.getByText('Edited title')).not.toBeVisible();
+    // Soft delete: the row is gone, and a 5-second undo toast appears.
+    await expect(page.getByRole('button', { name: 'Delete "Edited title"' })).toHaveCount(0);
+    await expect(page.getByText('Deleted Edited title')).toBeVisible();
   });
 });
 

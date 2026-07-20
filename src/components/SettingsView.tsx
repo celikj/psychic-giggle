@@ -2,14 +2,17 @@ import { useState, type ReactNode } from 'react';
 import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud, Globe } from 'lucide-react';
 import type { NotificationsController } from '../hooks/useNotifications';
 import type { Store } from '../hooks/useStore';
-import { useMonetization } from '../hooks/useMonetization';
+import type { MonetizationState } from '../hooks/useMonetization';
 import { shareBackup, pickAndRestoreBackup } from '../lib/backup';
+import { t } from '../lib/i18n';
 import pkgJson from '../../package.json';
 
 interface Props {
   store: Store;
   notif: NotificationsController;
+  monetization: MonetizationState;
   onShowIntro: () => void;
+  onShowPaywall?: () => void;
 }
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -138,10 +141,9 @@ function ToggleRow({
   );
 }
 
-export default function SettingsView({ store, notif, onShowIntro }: Props) {
+export default function SettingsView({ store, notif, monetization, onShowIntro }: Props) {
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const monetization = useMonetization();
 
   const handleExport = async () => {
     setBusy('export');

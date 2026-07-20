@@ -3,7 +3,7 @@ export type Locale = 'en' | 'tr';
 export const translations = {
   en: {
     // Nav
-    tasks: 'Tasks',
+    tasks: 'To-Dos',
     dailies: 'Dailies',
     habits: 'Habits',
     blocker: 'Blocker',

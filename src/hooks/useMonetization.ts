@@ -8,6 +8,8 @@ const RC_APPLE_API_KEY = 'appl_YOUR_API_KEY';
 
 export interface MonetizationState {
   isPremium: boolean;
+  /** Convenience mirror of isPremium for gate checks: 'free' | 'premium'. */
+  tier: 'free' | 'premium';
   isReady: boolean;
   packages: PurchasesPackage[];
   purchase: (pkg: PurchasesPackage) => Promise<boolean>;
@@ -39,8 +41,8 @@ export function useMonetization(): MonetizationState {
         checkPremiumStatus(customerInfo.customerInfo);
 
         const offerings = await Purchases.getOfferings();
-        if (offerings.offerings.current && offerings.offerings.current.availablePackages.length !== 0) {
-          setPackages(offerings.offerings.current.availablePackages);
+        if (offerings.current && offerings.current.availablePackages.length !== 0) {
+          setPackages(offerings.current.availablePackages);
         }
       } catch (e) {
         console.error('Error initializing RevenueCat:', e);
@@ -102,5 +104,5 @@ export function useMonetization(): MonetizationState {
     }
   }, []);
 
-  return { isPremium, isReady, packages, purchase, restore };
+  return { isPremium, tier: isPremium ? 'premium' : 'free', isReady, packages, purchase, restore };
 }

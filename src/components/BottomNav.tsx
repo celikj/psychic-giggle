@@ -1,6 +1,5 @@
 import { CheckSquare, Repeat, Target, Shield, Settings } from 'lucide-react';
-import { t } from '../lib/i18n';
-import { useStore } from '../hooks/useStore';
+import { t, type Locale } from '../lib/i18n';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
 
@@ -9,16 +8,16 @@ interface Props {
   setActiveTab: (t: Tab) => void;
   allLockingDone: boolean;
   lockingLeft: number;
+  locale: Locale;
 }
 
-export default function BottomNav({ activeTab, setActiveTab, allLockingDone, lockingLeft }: Props) {
-  const store = useStore();
+export default function BottomNav({ activeTab, setActiveTab, allLockingDone, lockingLeft, locale }: Props) {
   const tabs = [
-    { id: 'tasks',    label: t(store.locale, 'tasks'),    Icon: CheckSquare },
-    { id: 'dailies',  label: t(store.locale, 'dailies'),  Icon: Repeat },
-    { id: 'habits',   label: t(store.locale, 'habits'),   Icon: Target },
-    { id: 'blocker',  label: t(store.locale, 'blocker'),  Icon: Shield },
-    { id: 'settings', label: t(store.locale, 'settings'), Icon: Settings },
+    { id: 'tasks',    label: t(locale, 'tasks'),    Icon: CheckSquare },
+    { id: 'dailies',  label: t(locale, 'dailies'),  Icon: Repeat },
+    { id: 'habits',   label: t(locale, 'habits'),   Icon: Target },
+    { id: 'blocker',  label: t(locale, 'blocker'),  Icon: Shield },
+    { id: 'settings', label: t(locale, 'settings'), Icon: Settings },
   ] as const;
 
   return (
