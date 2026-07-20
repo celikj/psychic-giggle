@@ -16,6 +16,7 @@ import PaywallView from './components/PaywallView';
 import UndoToast from './components/UndoToast';
 import { hapticSuccess } from './lib/haptics';
 import { checkForExistingBackup, restoreBackup } from './lib/backup';
+import { isFocusActive, computeActiveSchedules } from './lib/focusSessions';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
 
@@ -62,15 +63,30 @@ export default function App() {
   // app — completing the last task on the Tasks tab must unlock immediately,
   // not only once the Blocker tab is opened. An active emergency pass pauses
   // the shield; when it expires (the store ticks it down) this re-locks.
+  // While a focus session is running it owns the shield (its own app list),
+  // so the task/scheduled sync must not touch it. A scheduled block that's
+  // currently active should keep apps blocked even once tasks are done.
+  const focusActive = isFocusActive(store.focusSession);
+  const scheduleActive = computeActiveSchedules(store.scheduledBlocks).length > 0;
   useEffect(() => {
-    st.sync(!store.allLockingDone && !store.emergencyActive);
-    
-    // Feature 12: Natively enforce the emergency pass timeout
+    if (focusActive) return;
+    st.sync((!store.allLockingDone || scheduleActive) && !store.emergencyActive);
+
+    // Natively enforce the emergency pass timeout (survives app kill for
+    // passes ≥15 min; shorter ones re-lock via the app timer + notification).
     if (store.emergencyActive) {
-      st.startEmergencyPass(5);
+      st.startEmergencyPass(store.emergencyPassMinutes);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.allLockingDone, store.emergencyActive, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
+  }, [store.allLockingDone, store.emergencyActive, focusActive, scheduleActive, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
+
+  // Keep native scheduled-block DeviceActivity schedules in step with the
+  // user's blocks, so they engage during their window even if TaskLock is
+  // never opened.
+  useEffect(() => {
+    st.updateScheduledBlocks(true, store.scheduledBlocks);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(store.scheduledBlocks), st.status.authorization, st.status.selectionCount]);
 
   // Streak Insurance: Reset freezes on new month, auto-apply on day tick
   useEffect(() => {
