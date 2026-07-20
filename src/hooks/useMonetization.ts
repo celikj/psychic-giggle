@@ -3,8 +3,12 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL, type CustomerInfo, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { telemetry } from '../lib/telemetry';
 
-// Replace these with your actual RevenueCat public API keys
-const RC_APPLE_API_KEY = 'appl_YOUR_API_KEY';
+// Injected at build time from the VITE_REVENUECAT_APPLE_KEY env var (set from
+// a GitHub Actions secret in the release build). RevenueCat's Apple key is a
+// PUBLIC SDK key — safe to ship in the app; only the RevenueCat *secret* key
+// must never be embedded. Empty when unset: purchases are disabled and the
+// app runs as free tier (dev/web/CI).
+const RC_APPLE_API_KEY = import.meta.env.VITE_REVENUECAT_APPLE_KEY ?? '';
 
 export interface MonetizationState {
   isPremium: boolean;
@@ -29,10 +33,18 @@ export function useMonetization(): MonetizationState {
       return;
     }
 
+    // No RevenueCat key configured (dev/web/CI, or key not yet set) — run as
+    // free tier without touching the SDK.
+    if (!RC_APPLE_API_KEY || RC_APPLE_API_KEY.includes('YOUR')) {
+      setIsPremium(false);
+      setIsReady(true);
+      return;
+    }
+
     const init = async () => {
       try {
         await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-        
+
         if (Capacitor.getPlatform() === 'ios') {
           await Purchases.configure({ apiKey: RC_APPLE_API_KEY });
         }
