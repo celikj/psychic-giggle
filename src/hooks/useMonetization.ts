@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL, type CustomerInfo, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
+import { telemetry } from '../lib/telemetry';
 
 // Replace these with your actual RevenueCat public API keys
 const RC_APPLE_API_KEY = 'appl_YOUR_API_KEY';
@@ -61,13 +62,18 @@ export function useMonetization(): MonetizationState {
     if (!Capacitor.isNativePlatform()) {
       // Mock purchase on web for testing
       setIsPremium(true);
+      telemetry.track('purchase', { type: pkg.packageType || 'MOCK' });
       return true;
     }
     
     try {
       const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
       checkPremiumStatus(customerInfo);
-      return typeof customerInfo.entitlements.active['premium'] !== 'undefined';
+      const isNowPremium = typeof customerInfo.entitlements.active['premium'] !== 'undefined';
+      if (isNowPremium) {
+        telemetry.track('purchase', { type: pkg.packageType || 'NATIVE' });
+      }
+      return isNowPremium;
     } catch (e: any) {
       if (!e.userCancelled) {
         window.alert(`Purchase failed: ${e.message}`);

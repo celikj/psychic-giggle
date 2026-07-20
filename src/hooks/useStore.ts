@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Task, Habit, Daily, Priority } from '../types';
+import { telemetry } from '../lib/telemetry';
 import { localToday } from '../lib/date';
 import { usePersisted } from './usePersisted';
 import {
@@ -87,6 +88,7 @@ export function useStore() {
   const getCompletedDates = useCallback((): Set<string> => computeCompletedDates(tasks), [tasks]);
 
   const addTask = useCallback((title: string, priority: Priority, isLocking: boolean) => {
+    telemetry.track('addTask', { priority, isLocking: isLocking ? 'true' : 'false' });
     setTasks(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { id: uid(), title, completed: false, date: selectedDate, priority, isLocking },
@@ -98,7 +100,13 @@ export function useStore() {
   }, [setTasks]);
 
   const toggleTask = useCallback((id: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+    setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => {
+      if (t.id === id) {
+        if (!t.completed) telemetry.track('completeTask', { isLocking: t.isLocking ? 'true' : 'false' });
+        return { ...t, completed: !t.completed };
+      }
+      return t;
+    }));
   }, [setTasks]);
 
   const deleteTask = useCallback((id: string) => {
@@ -122,18 +130,25 @@ export function useStore() {
     setTasks(prev => reorderByIds(Array.isArray(prev) ? prev : [], orderedIds));
   }, [setTasks]);
 
-  const toggleHabit = useCallback((id: string) => {
+  const toggleHabit = useCallback((id: string, overrideDate?: string) => {
+    const targetDate = overrideDate || today;
     setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => {
-      if (h.id !== id) return h;
-      const done = h.completedDates.includes(today);
-      return {
-        ...h,
-        completedDates: done ? h.completedDates.filter(d => d !== today) : [...h.completedDates, today],
-      };
+      if (h.id === id) {
+        const isDone = h.completedDates.includes(targetDate);
+        if (!isDone) telemetry.track('checkoffHabit');
+        return {
+          ...h,
+          completedDates: isDone
+            ? h.completedDates.filter(d => d !== targetDate)
+            : [...h.completedDates, targetDate],
+        };
+      }
+      return h;
     }));
   }, [today, setHabits]);
 
   const addHabit = useCallback((title: string, emoji: string, color: string, targetDays: number[]) => {
+    telemetry.track('addHabit');
     setHabits(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { id: uid(), title, emoji, completedDates: [], color, targetDays },
@@ -149,6 +164,7 @@ export function useStore() {
   }, [setHabits]);
 
   const addDaily = useCallback((daily: Omit<Daily, 'id' | 'completedDates'>) => {
+    telemetry.track('addDaily', { isLocking: daily.isLocking ? 'true' : 'false' });
     setDailies(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { ...daily, id: uid(), completedDates: [] },
@@ -157,12 +173,17 @@ export function useStore() {
 
   const toggleDaily = useCallback((id: string) => {
     setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => {
-      if (d.id !== id) return d;
-      const done = d.completedDates.includes(today);
-      return {
-        ...d,
-        completedDates: done ? d.completedDates.filter(x => x !== today) : [...d.completedDates, today],
-      };
+      if (d.id === id) {
+        const isDone = d.completedDates.includes(today);
+        if (!isDone) telemetry.track('checkoffDaily', { isLocking: d.isLocking ? 'true' : 'false' });
+        return {
+          ...d,
+          completedDates: isDone
+            ? d.completedDates.filter(dt => dt !== today)
+            : [...d.completedDates, today],
+        };
+      }
+      return d;
     }));
   }, [today, setDailies]);
 
