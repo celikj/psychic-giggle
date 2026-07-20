@@ -3,6 +3,7 @@ import { Plus, Flame, X } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Habit } from '../types';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
+import EditButton from './EditButton';
 import { hapticTick } from '../lib/haptics';
 import { HABIT_TEMPLATES } from '../lib/templates';
 
@@ -179,7 +180,7 @@ export default function HabitsView({ store }: Props) {
                   <span className="text-base">{doneToday ? '✓' : '○'}</span>
                 </button>
 
-                {/* Delete */}
+                <EditButton label={`Edit habit "${habit.title}"`} onClick={() => startEdit(habit)} />
                 <ConfirmDeleteButton
                   label={`Delete habit "${habit.title}"`}
                   onConfirm={() => deleteHabit(habit.id)}

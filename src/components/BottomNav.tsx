@@ -20,7 +20,7 @@ const tabs: { id: Tab; label: string; Icon: React.FC<{ className?: string }> }[]
 export default function BottomNav({ activeTab, setActiveTab, allLockingDone, lockingLeft }: Props) {
   return (
     <div
-      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex items-center justify-around px-1 pb-safe border-t border-white/5"
+      className="flex-shrink-0 w-full flex items-center justify-around px-1 border-t border-white/5"
       style={{ background: 'rgba(10,10,15,0.95)', backdropFilter: 'blur(20px)', paddingBottom: 'max(env(safe-area-inset-bottom), 16px)', paddingTop: '12px' }}
     >
       {tabs.map(({ id, label, Icon }) => {

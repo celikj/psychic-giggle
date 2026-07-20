@@ -1,6 +1,7 @@
-import { Lock, Unlock, Shield, ShieldCheck, ChevronRight, Loader2, Smartphone, CheckCircle2, Circle, Clock } from 'lucide-react';
+import { Lock, Unlock, Shield, ShieldCheck, ChevronRight, Loader2, Smartphone, CheckCircle2, Circle, Clock, LifeBuoy } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { ScreenTimeController } from '../hooks/useScreenTime';
+import { hapticWarning } from '../lib/haptics';
 
 interface Props {
   store: Store;
@@ -87,6 +88,38 @@ export default function BlockerView({ store, st }: Props) {
               <span>{lockingDone} / {lockingItems.length} locking</span>
             </div>
           </div>
+        )}
+
+        {/* Emergency pass — a strict blocker with zero escape hatch just gets
+            deleted the first time someone urgently needs a blocked app. */}
+        {!allLockingDone && (
+          store.emergencyActive ? (
+            <div className="mt-4 flex items-center gap-2.5 rounded-xl px-3.5 py-3 bg-amber-500/10 border border-amber-500/25">
+              <LifeBuoy className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <div className="flex-1 text-xs font-semibold text-amber-300">
+                Emergency pass active — apps lock again in{' '}
+                {Math.floor(store.emergencySecondsLeft / 60)}:{String(store.emergencySecondsLeft % 60).padStart(2, '0')}
+              </div>
+            </div>
+          ) : store.emergencyUsedToday ? (
+            <p className="mt-4 text-[11px] text-white/25 px-1">
+              <LifeBuoy className="w-3 h-3 inline mr-1 align-[-1px]" />
+              Emergency pass used today — back tomorrow.
+            </p>
+          ) : (
+            <button
+              onClick={() => {
+                if (window.confirm(`Unlock your apps for ${store.emergencyPassMinutes} minutes? You get one emergency pass per day.`)) {
+                  hapticWarning();
+                  store.startEmergencyPass();
+                }
+              }}
+              className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/50 text-xs font-semibold active:scale-95 transition-transform"
+            >
+              <LifeBuoy className="w-3.5 h-3.5" />
+              Emergency pass — {store.emergencyPassMinutes} min, once a day
+            </button>
+          )
         )}
       </div>
 

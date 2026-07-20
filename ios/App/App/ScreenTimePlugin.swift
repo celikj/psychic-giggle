@@ -11,6 +11,10 @@ import SwiftUI
 import DeviceActivity
 #endif
 
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
+
 /// Native bridge to Apple's Screen Time (Family Controls) framework.
 ///
 /// Lets the web layer request authorization, pick which apps/categories to
@@ -30,6 +34,7 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "startBlocking", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopBlocking", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateSchedule", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "updateWidgetState", returnType: CAPPluginReturnPromise),
     ]
 
     private let selectionKey = "tasklock.familyActivitySelection"
@@ -235,6 +240,22 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         #else
         call.resolve(["monitoring": false])
         #endif
+    }
+
+    /// Stores today's lock-state snapshot for the home screen widget and asks
+    /// WidgetKit to redraw. Called by the web layer whenever the state changes.
+    @objc func updateWidgetState(_ call: CAPPluginCall) {
+        let state = TaskLockWidgetState(
+            date: call.getString("date") ?? TaskLockShared.localDateString(),
+            lockingLeft: call.getInt("lockingLeft") ?? 0,
+            allLockingDone: call.getBool("allLockingDone") ?? true,
+            hasLockingToday: call.getBool("hasLockingToday") ?? false
+        )
+        TaskLockShared.saveWidgetState(state)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
+        call.resolve()
     }
 }
 

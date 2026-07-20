@@ -4,6 +4,7 @@ import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
+import EditButton from './EditButton';
 import { hapticTick } from '../lib/haptics';
 import { DAILY_TEMPLATES } from '../lib/templates';
 
@@ -167,6 +168,7 @@ export default function DailiesView({ store }: Props) {
             </div>
           </button>
 
+          <EditButton label={`Edit daily "${daily.title}"`} onClick={() => startEdit(daily)} />
           <ConfirmDeleteButton
             label={`Delete daily "${daily.title}"`}
             warnLocking={due && daily.isLocking && !done}

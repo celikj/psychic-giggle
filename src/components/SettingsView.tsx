@@ -1,12 +1,78 @@
 import { useState, type ReactNode } from 'react';
-import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck } from 'lucide-react';
+import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays } from 'lucide-react';
 import type { NotificationsController } from '../hooks/useNotifications';
+import type { Store } from '../hooks/useStore';
 import { shareBackup, pickAndRestoreBackup } from '../lib/backup';
 import pkgJson from '../../package.json';
 
 interface Props {
+  store: Store;
   notif: NotificationsController;
   onShowIntro: () => void;
+}
+
+const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+/** Last-7-days completions bar chart + headline numbers. */
+function WeeklyStatsCard({ store }: { store: Store }) {
+  const stats = store.getWeeklyStats();
+  const max = Math.max(1, ...stats.days.map(d => d.total));
+
+  return (
+    <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4">
+      <div className="flex items-end gap-2 h-24" role="img" aria-label={`Completions per day this week: ${stats.days.map(d => d.total).join(', ')}`}>
+        {stats.days.map(d => {
+          const isToday = d.date === store.today;
+          const weekday = new Date(d.date + 'T00:00:00').getDay();
+          return (
+            <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+              {d.total > 0 && (
+                <span className={`text-[9px] font-bold ${isToday ? 'text-[#FF6B35]' : 'text-white/40'}`}>{d.total}</span>
+              )}
+              <div
+                className="w-full rounded-md transition-all duration-500"
+                style={{
+                  height: d.total === 0 ? '3px' : `${Math.max(8, (d.total / max) * 100)}%`,
+                  background: d.total === 0
+                    ? 'rgba(255,255,255,0.08)'
+                    : isToday
+                      ? 'linear-gradient(180deg, #FF6B35, #FBBF24)'
+                      : 'rgba(255,107,53,0.45)',
+                }}
+              />
+              <span className={`text-[9px] font-semibold ${isToday ? 'text-[#FF6B35]' : 'text-white/25'}`}>
+                {DAY_LETTERS[weekday]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-white/5">
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+            <span className="text-lg font-bold text-white">{stats.totalCompletions}</span>
+          </div>
+          <p className="text-[10px] text-white/30 font-medium mt-0.5">Done this week</p>
+        </div>
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1">
+            <Flame className="w-3.5 h-3.5 text-orange-400" />
+            <span className="text-lg font-bold text-white">{stats.bestStreak}</span>
+          </div>
+          <p className="text-[10px] text-white/30 font-medium mt-0.5">Best streak</p>
+        </div>
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1">
+            <CalendarDays className="w-3.5 h-3.5 text-sky-400" />
+            <span className="text-lg font-bold text-white">{stats.activeDays}<span className="text-white/30 text-xs font-semibold">/7</span></span>
+          </div>
+          <p className="text-[10px] text-white/30 font-medium mt-0.5">Active days</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SectionLabel({ children }: { children: ReactNode }) {
@@ -71,7 +137,7 @@ function ToggleRow({
   );
 }
 
-export default function SettingsView({ notif, onShowIntro }: Props) {
+export default function SettingsView({ store, notif, onShowIntro }: Props) {
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -116,6 +182,9 @@ export default function SettingsView({ notif, onShowIntro }: Props) {
       </div>
 
       <div className="px-4 space-y-2">
+        <SectionLabel>This Week</SectionLabel>
+        <WeeklyStatsCard store={store} />
+
         <SectionLabel>Getting Started</SectionLabel>
         <Row
           icon={<PlayCircle className="w-5 h-5 text-[#FF6B35]" />}

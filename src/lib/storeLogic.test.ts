@@ -9,6 +9,9 @@ import {
   computePendingLockDates,
   computePendingTimedLockDates,
   computeLast7Days,
+  computeOverdueTasks,
+  computeWeeklyStats,
+  reorderByIds,
 } from './storeLogic';
 
 // Fixed anchor so tests don't depend on the real calendar date. Its weekday
@@ -303,6 +306,89 @@ describe('computePendingTimedLockDates', () => {
     const d = daily({ isLocking: true });
     const byTime = computePendingTimedLockDates([d], NOW);
     expect(Object.keys(byTime)).toEqual([]);
+  });
+});
+
+describe('computeOverdueTasks', () => {
+  it('returns incomplete tasks dated before today, oldest first', () => {
+    const old = task({ id: 'old', completed: false, date: daysAgo(3) });
+    const recent = task({ id: 'recent', completed: false, date: daysAgo(1) });
+    const overdue = computeOverdueTasks([recent, old], TODAY);
+    expect(overdue.map(t => t.id)).toEqual(['old', 'recent']);
+  });
+
+  it('excludes completed past tasks and anything from today onward', () => {
+    const overdue = computeOverdueTasks([
+      task({ completed: true, date: daysAgo(1) }),
+      task({ completed: false, date: TODAY }),
+      task({ completed: false, date: daysAhead(1) }),
+    ], TODAY);
+    expect(overdue).toEqual([]);
+  });
+});
+
+describe('reorderByIds', () => {
+  const a = task({ id: 'a' });
+  const b = task({ id: 'b' });
+  const c = task({ id: 'c' });
+  const other = task({ id: 'other', date: daysAhead(1) });
+
+  it('applies the given relative order to the named tasks', () => {
+    const result = reorderByIds([a, b, c], ['c', 'a', 'b']);
+    expect(result.map(t => t.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('leaves tasks outside the ordered subset in their original positions', () => {
+    const result = reorderByIds([a, other, b, c], ['c', 'b', 'a']);
+    expect(result.map(t => t.id)).toEqual(['c', 'other', 'b', 'a']);
+  });
+
+  it('ignores unknown ids without corrupting the list', () => {
+    const result = reorderByIds([a, b], ['ghost', 'b', 'a']);
+    expect(result.map(t => t.id).sort()).toEqual(['a', 'b']);
+    expect(result).toHaveLength(2);
+  });
+});
+
+describe('computeWeeklyStats', () => {
+  it('is all zeros with no data', () => {
+    const stats = computeWeeklyStats([], [], [], NOW);
+    expect(stats.days).toHaveLength(7);
+    expect(stats.totalCompletions).toBe(0);
+    expect(stats.bestStreak).toBe(0);
+    expect(stats.activeDays).toBe(0);
+  });
+
+  it('counts completed tasks, dailies, and habits per day', () => {
+    const stats = computeWeeklyStats(
+      [task({ date: TODAY, completed: true }), task({ date: TODAY, completed: false })],
+      [daily({ completedDates: [TODAY, daysAgo(1)] })],
+      [habit({ completedDates: [TODAY] })],
+      NOW,
+    );
+    const todayRow = stats.days[6];
+    expect(todayRow.date).toBe(TODAY);
+    expect(todayRow.tasks).toBe(1); // the incomplete one doesn't count
+    expect(todayRow.dailies).toBe(1);
+    expect(todayRow.habits).toBe(1);
+    expect(todayRow.total).toBe(3);
+    expect(stats.totalCompletions).toBe(4); // + yesterday's daily
+    expect(stats.activeDays).toBe(2);
+  });
+
+  it('ignores completions older than 7 days', () => {
+    const stats = computeWeeklyStats([], [], [habit({ completedDates: [daysAgo(8)] })], NOW);
+    expect(stats.totalCompletions).toBe(0);
+  });
+
+  it('bestStreak is the max current streak across dailies and habits', () => {
+    const stats = computeWeeklyStats(
+      [],
+      [daily({ targetDays: [0, 1, 2, 3, 4, 5, 6], completedDates: [TODAY, daysAgo(1)] })],
+      [habit({ completedDates: [TODAY, daysAgo(1), daysAgo(2), daysAgo(3)] })],
+      NOW,
+    );
+    expect(stats.bestStreak).toBe(4);
   });
 });
 

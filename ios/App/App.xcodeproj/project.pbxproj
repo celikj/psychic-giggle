@@ -23,6 +23,9 @@
 		CC0000000000000000000012 /* TaskLockShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000005 /* TaskLockShared.swift */; };
 		CC0000000000000000000013 /* DeviceActivityMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000002 /* DeviceActivityMonitorExtension.swift */; };
 		CC0000000000000000000014 /* TaskMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000001 /* TaskMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DD0000000000000000000011 /* TaskLockWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000002 /* TaskLockWidget.swift */; };
+		DD0000000000000000000012 /* TaskLockShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000005 /* TaskLockShared.swift */; };
+		DD0000000000000000000014 /* TaskLockWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000001 /* TaskLockWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -34,6 +37,7 @@
 			files = (
 				BB0000000000000000000011 /* ShieldConfig.appex in Embed Foundation Extensions */,
 				CC0000000000000000000014 /* TaskMonitor.appex in Embed Foundation Extensions */,
+				DD0000000000000000000014 /* TaskLockWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -63,6 +67,10 @@
 		CC0000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		CC0000000000000000000004 /* TaskMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskMonitor.entitlements; sourceTree = "<group>"; };
 		CC0000000000000000000005 /* TaskLockShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskLockShared.swift; sourceTree = "<group>"; };
+		DD0000000000000000000001 /* TaskLockWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TaskLockWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD0000000000000000000002 /* TaskLockWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskLockWidget.swift; sourceTree = "<group>"; };
+		DD0000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		DD0000000000000000000004 /* TaskLockWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskLockWidget.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,6 +96,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD000000000000000000000B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +113,7 @@
 				504EC3061FED79650016851F /* App */,
 				BB000000000000000000000D /* ShieldConfig */,
 				CC0000000000000000000006 /* TaskMonitor */,
+				DD0000000000000000000009 /* TaskLockWidget */,
 				CC0000000000000000000007 /* Shared */,
 				504EC3051FED79650016851F /* Products */,
 			);
@@ -109,6 +125,7 @@
 				504EC3041FED79650016851F /* App.app */,
 				BB0000000000000000000008 /* ShieldConfig.appex */,
 				CC0000000000000000000001 /* TaskMonitor.appex */,
+				DD0000000000000000000001 /* TaskLockWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -159,6 +176,16 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		DD0000000000000000000009 /* TaskLockWidget */ = {
+			isa = PBXGroup;
+			children = (
+				DD0000000000000000000002 /* TaskLockWidget.swift */,
+				DD0000000000000000000003 /* Info.plist */,
+				DD0000000000000000000004 /* TaskLockWidget.entitlements */,
+			);
+			path = TaskLockWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -176,6 +203,7 @@
 			dependencies = (
 				BB000000000000000000000F /* PBXTargetDependency */,
 				CC000000000000000000000F /* PBXTargetDependency */,
+				DD0000000000000000000010 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -217,6 +245,22 @@
 			productReference = CC0000000000000000000001 /* TaskMonitor.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		DD0000000000000000000008 /* TaskLockWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DD0000000000000000000005 /* Build configuration list for PBXNativeTarget "TaskLockWidget" */;
+			buildPhases = (
+				DD000000000000000000000A /* Sources */,
+				DD000000000000000000000B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TaskLockWidget;
+			productName = TaskLockWidget;
+			productReference = DD0000000000000000000001 /* TaskLockWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -236,6 +280,10 @@
 						ProvisioningStyle = Automatic;
 					};
 					CC0000000000000000000008 = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
+					};
+					DD0000000000000000000008 = {
 						CreatedOnToolsVersion = 15.0;
 						ProvisioningStyle = Automatic;
 					};
@@ -260,6 +308,7 @@
 				504EC3031FED79650016851F /* App */,
 				BB0000000000000000000001 /* ShieldConfig */,
 				CC0000000000000000000008 /* TaskMonitor */,
+				DD0000000000000000000008 /* TaskLockWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -309,6 +358,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD000000000000000000000A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DD0000000000000000000011 /* TaskLockWidget.swift in Sources */,
+				DD0000000000000000000012 /* TaskLockShared.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXContainerItemProxy section */
@@ -326,6 +384,13 @@
 			remoteGlobalIDString = CC0000000000000000000008;
 			remoteInfo = TaskMonitor;
 		};
+		DD000000000000000000000F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DD0000000000000000000008;
+			remoteInfo = TaskLockWidget;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */
@@ -338,6 +403,11 @@
 			isa = PBXTargetDependency;
 			target = CC0000000000000000000008 /* TaskMonitor */;
 			targetProxy = CC000000000000000000000E /* PBXContainerItemProxy */;
+		};
+		DD0000000000000000000010 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DD0000000000000000000008 /* TaskLockWidget */;
+			targetProxy = DD000000000000000000000F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -604,6 +674,50 @@
 			};
 			name = Release;
 		};
+		DD000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TaskLockWidget/TaskLockWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TaskLockWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.celikj.tasklock.TaskLockWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DD000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TaskLockWidget/TaskLockWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TaskLockWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.celikj.tasklock.TaskLockWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -639,6 +753,15 @@
 			buildConfigurations = (
 				CC000000000000000000000C /* Debug */,
 				CC000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DD0000000000000000000005 /* Build configuration list for PBXNativeTarget "TaskLockWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DD000000000000000000000C /* Debug */,
+				DD000000000000000000000D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

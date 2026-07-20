@@ -35,11 +35,12 @@ export default function App() {
 
   // Keep the OS shield in step with the locking tasks from anywhere in the
   // app — completing the last task on the Tasks tab must unlock immediately,
-  // not only once the Blocker tab is opened.
+  // not only once the Blocker tab is opened. An active emergency pass pauses
+  // the shield; when it expires (the store ticks it down) this re-locks.
   useEffect(() => {
-    st.sync(!store.allLockingDone);
+    st.sync(!store.allLockingDone && !store.emergencyActive);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.allLockingDone, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
+  }, [store.allLockingDone, store.emergencyActive, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
 
   // Tell the native layer which days (today or later) still have incomplete
   // locking to-dos or all-day locking dailies, so the midnight DeviceActivity
@@ -61,12 +62,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingLockDates.join(','), JSON.stringify(pendingTimedLockDates), st.enabled, st.status.authorization, st.status.selectionCount]);
 
-  // Reminders: a heads-up before each timed locking daily starts gating, and
-  // a one-shot nudge tonight if something is still locking apps by evening.
+  // Keep the home screen widget's snapshot of today's lock state fresh.
   useEffect(() => {
-    notif.resync(store.dailies, !store.allLockingDone);
+    st.updateWidgetState({
+      date: store.today,
+      lockingLeft: store.lockingLeft,
+      allLockingDone: store.allLockingDone,
+      hasLockingToday: store.hasLockingToday,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.dailies, store.allLockingDone, notif.enabled, notif.permission]);
+  }, [store.today, store.lockingLeft, store.allLockingDone, store.hasLockingToday]);
+
+  // Reminders: a heads-up before each timed locking daily starts gating, a
+  // one-shot nudge tonight if something is still locking apps by evening, and
+  // an "apps locked again" note when an emergency pass runs out.
+  useEffect(() => {
+    notif.resync(store.dailies, !store.allLockingDone, store.emergencyPassExpiresAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.dailies, store.allLockingDone, store.emergencyPassExpiresAt, notif.enabled, notif.permission]);
 
   // Unlock celebration, shown wherever the last locking item is completed.
   const [celebrated, setCelebrated] = useState(false);
@@ -93,7 +106,10 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen max-w-md mx-auto relative overflow-hidden animate-slide-up" style={{ background: '#0a0a0f' }}>
+    <div
+      className="max-w-md mx-auto relative overflow-hidden animate-slide-up flex flex-col"
+      style={{ background: '#0a0a0f', height: '100dvh' }}
+    >
       {showIntro && <Onboarding isNativeIOS={st.isNativeIOS} onDone={finishIntro} />}
 
       {celebrated && (
@@ -106,12 +122,12 @@ export default function App() {
         </div>
       )}
 
-      <div className="overflow-y-auto" style={{ minHeight: '100vh' }}>
+      <div className="flex-1 overflow-y-auto min-h-0">
         {activeTab === 'tasks'    && <TasksView store={store} />}
         {activeTab === 'dailies'  && <DailiesView store={store} />}
         {activeTab === 'habits'   && <HabitsView store={store} />}
         {activeTab === 'blocker'  && <BlockerView store={store} st={st} />}
-        {activeTab === 'settings' && <SettingsView notif={notif} onShowIntro={() => setShowIntro(true)} />}
+        {activeTab === 'settings' && <SettingsView store={store} notif={notif} onShowIntro={() => setShowIntro(true)} />}
       </div>
       <BottomNav
         activeTab={activeTab}
