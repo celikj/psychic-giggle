@@ -10,6 +10,18 @@ import ManagedSettings
 /// at midnight for all-day locking items, or at a specific time of day for
 /// timed locking dailies — so everything it needs to decide "should this
 /// re-lock right now?" must be readable from here.
+/// Snapshot of today's lock state, written by the web layer whenever it
+/// changes, so the home screen widget can render without running any of the
+/// app's logic.
+struct TaskLockWidgetState: Codable {
+    /// Local YYYY-MM-DD the snapshot describes — the widget treats any other
+    /// day's snapshot as stale rather than showing yesterday's numbers.
+    var date: String
+    var lockingLeft: Int
+    var allLockingDone: Bool
+    var hasLockingToday: Bool
+}
+
 enum TaskLockShared {
     static let appGroupId = "group.com.celikj.tasklock"
 
@@ -17,6 +29,7 @@ enum TaskLockShared {
     static let enabledKey = "tasklock.blockingEnabled"
     static let pendingDatesKey = "tasklock.pendingLockDates"
     static let pendingTimedDatesKey = "tasklock.pendingTimedLockDates"
+    static let widgetStateKey = "tasklock.widgetState"
 
     /// The one repeating midnight schedule, for all-day locking items.
     static let midnightActivityName = "tasklock.daily"
@@ -56,6 +69,17 @@ enum TaskLockShared {
     static func savePendingTimedDates(_ dict: [String: [String]]) {
         if let data = try? JSONEncoder().encode(dict) {
             defaults?.set(data, forKey: pendingTimedDatesKey)
+        }
+    }
+
+    static func loadWidgetState() -> TaskLockWidgetState? {
+        guard let data = defaults?.data(forKey: widgetStateKey) else { return nil }
+        return try? JSONDecoder().decode(TaskLockWidgetState.self, from: data)
+    }
+
+    static func saveWidgetState(_ state: TaskLockWidgetState) {
+        if let data = try? JSONEncoder().encode(state) {
+            defaults?.set(data, forKey: widgetStateKey)
         }
     }
 

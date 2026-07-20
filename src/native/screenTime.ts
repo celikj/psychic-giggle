@@ -30,6 +30,16 @@ export interface ScreenTimePlugin {
     timedDates: Record<string, string[]>;
     enabled: boolean;
   }): Promise<{ monitoring: boolean }>;
+  /**
+   * Push today's lock-state snapshot to the App Group for the home screen
+   * widget, and ask WidgetKit to redraw.
+   */
+  updateWidgetState(options: {
+    date: string;
+    lockingLeft: number;
+    allLockingDone: boolean;
+    hasLockingToday: boolean;
+  }): Promise<void>;
 }
 
 // Native impl lives in ios/App/App/ScreenTimePlugin.swift (Family Controls).

@@ -89,6 +89,18 @@ export function useScreenTime() {
     }
   }, [enabled]);
 
+  /** Push today's lock state to the home screen widget. */
+  const updateWidgetState = useCallback(async (state: {
+    date: string; lockingLeft: number; allLockingDone: boolean; hasLockingToday: boolean;
+  }) => {
+    if (!isNativeIOS) return;
+    try {
+      await ScreenTime.updateWidgetState(state);
+    } catch {
+      /* older native build without the method — widget just stays stale */
+    }
+  }, []);
+
   /** Keep the OS shield in step with whether locking tasks are still pending. */
   const sync = useCallback(async (shouldBlock: boolean) => {
     if (!isNativeIOS || !enabled) return;
@@ -106,7 +118,7 @@ export function useScreenTime() {
     }
   }, [enabled, status.authorization, status.selectionCount, status.blocking, refresh]);
 
-  return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, updateSchedule, refresh, isNativeIOS };
+  return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, updateSchedule, updateWidgetState, refresh, isNativeIOS };
 }
 
 export type ScreenTimeController = ReturnType<typeof useScreenTime>;

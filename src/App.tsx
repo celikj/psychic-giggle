@@ -62,6 +62,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingLockDates.join(','), JSON.stringify(pendingTimedLockDates), st.enabled, st.status.authorization, st.status.selectionCount]);
 
+  // Keep the home screen widget's snapshot of today's lock state fresh.
+  useEffect(() => {
+    st.updateWidgetState({
+      date: store.today,
+      lockingLeft: store.lockingLeft,
+      allLockingDone: store.allLockingDone,
+      hasLockingToday: store.hasLockingToday,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.today, store.lockingLeft, store.allLockingDone, store.hasLockingToday]);
+
   // Reminders: a heads-up before each timed locking daily starts gating, a
   // one-shot nudge tonight if something is still locking apps by evening, and
   // an "apps locked again" note when an emergency pass runs out.
