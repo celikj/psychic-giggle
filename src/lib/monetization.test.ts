@@ -1,39 +1,36 @@
 import { describe, it, expect } from 'vitest';
-import { canAddDaily, canAddHabit, canAddLockingTask, canMakeTaskLocking, LIMITS } from './monetization';
+import { canAddLockingDaily, canMakeDailyLocking, canAddLockingTask, canMakeTaskLocking, LIMITS } from './monetization';
 import type { Task, Daily, Habit } from '../types';
 
 describe('Monetization Logic', () => {
-  it('allows adding dailies up to the limit', () => {
+  it('allows adding locking dailies up to the limit', () => {
     const dailies: Daily[] = [];
-    expect(canAddDaily(dailies, false)).toBe(true);
+    expect(canAddLockingDaily(dailies, false)).toBe(true);
     
-    // Fill up to limit
-    for (let i = 0; i < LIMITS.FREE_DAILIES; i++) {
-      dailies.push({ id: `d${i}` } as Daily);
+    for (let i = 0; i < LIMITS.FREE_LOCKING_DAILIES; i++) {
+      dailies.push({ id: `d${i}`, isLocking: true } as Daily);
     }
     
-    expect(canAddDaily(dailies, false)).toBe(false);
-    expect(canAddDaily(dailies, true)).toBe(true); // Premium bypasses
-  });
-
-  it('allows adding habits up to the limit', () => {
-    const habits: Habit[] = [];
-    expect(canAddHabit(habits, false)).toBe(true);
+    // Limit reached for locking dailies
+    expect(canAddLockingDaily(dailies, false)).toBe(false);
+    expect(canAddLockingDaily(dailies, true)).toBe(true); // Premium bypasses
     
-    for (let i = 0; i < LIMITS.FREE_HABITS; i++) {
-      habits.push({ id: `h${i}` } as Habit);
-    }
+    // Changing an existing non-locking daily to locking
+    dailies.push({ id: 'free1', isLocking: false } as Daily);
+    expect(canMakeDailyLocking(dailies, 'free1', false)).toBe(false);
     
-    expect(canAddHabit(habits, false)).toBe(false);
-    expect(canAddHabit(habits, true)).toBe(true); // Premium bypasses
+    // Editing an existing locking daily is fine
+    expect(canMakeDailyLocking(dailies, 'd0', false)).toBe(true);
   });
 
   it('limits locking tasks per day', () => {
     const tasks: Task[] = [];
     expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(true);
     
-    // Add one locking task on 01-01
+    // Add two locking tasks on 01-01
     tasks.push({ id: 't1', date: '2026-01-01', isLocking: true } as Task);
+    expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(true);
+    tasks.push({ id: 't1_2', date: '2026-01-01', isLocking: true } as Task);
     
     // Limit reached for 01-01
     expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(false);
@@ -52,6 +49,7 @@ describe('Monetization Logic', () => {
   it('allows editing an existing locking task without hitting limit again', () => {
     const tasks: Task[] = [
       { id: 't1', date: '2026-01-01', isLocking: true } as Task,
+      { id: 't1_2', date: '2026-01-01', isLocking: true } as Task,
     ];
     
     // We want to edit 't1' and keep it locking

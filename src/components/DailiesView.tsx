@@ -3,7 +3,7 @@ import { Plus, Flame, X, Lock, Clock, ScanBarcode, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
-import { canAddDaily, LIMITS } from '../lib/monetization';
+import { canAddLockingDaily, canMakeDailyLocking, LIMITS } from '../lib/monetization';
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
@@ -84,9 +84,13 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
       barcode: barcode ?? undefined,
     };
     if (editingId) {
+      if (isLocking && !canMakeDailyLocking(store.dailies, editingId, monetization.isPremium)) {
+        onShowPaywall();
+        return;
+      }
       editDaily(editingId, payload);
     } else {
-      if (!canAddDaily(store.dailies, monetization.isPremium)) {
+      if (isLocking && !canAddLockingDaily(store.dailies, monetization.isPremium)) {
         onShowPaywall();
         return;
       }
@@ -274,7 +278,7 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
                 <button
                   key={t.title}
                   onClick={() => {
-                    if (!canAddDaily(store.dailies, monetization.isPremium)) {
+                    if (t.isLocking && !canAddLockingDaily(store.dailies, monetization.isPremium)) {
                       onShowPaywall();
                       return;
                     }

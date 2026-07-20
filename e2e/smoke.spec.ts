@@ -320,22 +320,25 @@ test.describe('paywall', () => {
     await skipOnboarding(page);
     
     // Web mocks natively to free tier initially. 
-    // 1. Try to add 3 dailies
+    // 1. Try to add 3 locking dailies
     await page.getByRole('button', { name: 'Dailies' }).click();
     
-    // Add Daily 1
+    // Add Locking Daily 1
     await page.getByRole('button', { name: 'Add Daily' }).first().click();
-    await page.getByPlaceholder('Daily routine name...').fill('Free Daily 1');
+    await page.getByPlaceholder('Daily routine name...').fill('Locking Daily 1');
+    await page.getByText('Make this a locking daily').click();
     await page.getByRole('button', { name: 'Add Daily' }).last().click();
     
-    // Add Daily 2
+    // Add Locking Daily 2
     await page.getByRole('button', { name: 'Add Daily' }).first().click();
-    await page.getByPlaceholder('Daily routine name...').fill('Free Daily 2');
+    await page.getByPlaceholder('Daily routine name...').fill('Locking Daily 2');
+    await page.getByText('Make this a locking daily').click();
     await page.getByRole('button', { name: 'Add Daily' }).last().click();
     
-    // Add Daily 3 -> Should trigger paywall
+    // Add Locking Daily 3 -> Should trigger paywall
     await page.getByRole('button', { name: 'Add Daily' }).first().click();
     await page.getByPlaceholder('Daily routine name...').fill('Paid Daily 3');
+    await page.getByText('Make this a locking daily').click();
     await page.getByRole('button', { name: 'Add Daily' }).last().click();
     
     // Assert paywall is visible
@@ -352,9 +355,8 @@ test.describe('paywall', () => {
     
     // 2. Try locking tasks limit
     await page.getByRole('button', { name: 'To-Dos' }).click();
-    // Since we purchased premium above, we shouldn't hit the limit of 1.
-    // Wait, let's reload to reset mock state, wait, the mock state is in memory for useMonetization!
-    // But data is in localStorage. Let's just create 2 locking tasks and it should succeed because we are premium.
+    // Since we purchased premium above, we shouldn't hit the limit of 2.
+    // Let's just create 3 locking tasks and it should succeed because we are premium.
     
     await page.getByRole('button', { name: 'Add Task' }).first().click();
     await page.getByPlaceholder('What needs to be done?').fill('Lock 1');
@@ -366,7 +368,12 @@ test.describe('paywall', () => {
     await page.getByText('Make this a locking task').click();
     await page.getByRole('button', { name: 'Add Task' }).last().click();
     
-    await expect(page.getByText('Lock 2')).toBeVisible();
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Lock 3');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    await expect(page.getByText('Lock 3')).toBeVisible();
   });
 });
 

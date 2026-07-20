@@ -48,13 +48,15 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
           <h1 className="text-3xl font-bold text-white mb-3">TaskLock Premium</h1>
           
           {reason && (
-            <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-3 py-1.5 rounded-full mb-4">
-              <ShieldAlert className="w-4 h-4 text-red-400" />
-              <span className="text-xs font-semibold text-red-400">
-                {reason === 'daily' && `Free tier is limited to ${LIMITS.FREE_DAILIES} dailies`}
-                {reason === 'habit' && `Free tier is limited to ${LIMITS.FREE_HABITS} habits`}
-                {reason === 'locking' && `Free tier is limited to ${LIMITS.FREE_LOCKING_TASKS_PER_DAY} locking task per day`}
-              </span>
+            <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl mb-4 text-left">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldAlert className="w-4 h-4 text-red-400" />
+                <h3 className="text-white font-bold">Free tier is limited to:</h3>
+              </div>
+              <ul className="text-white/60 text-xs space-y-1.5 list-disc list-inside">
+                <li>Max {LIMITS.FREE_LOCKING_TASKS_PER_DAY} locking To-Dos per day</li>
+                <li>Max {LIMITS.FREE_LOCKING_DAILIES} locking Dailies total</li>
+              </ul>
             </div>
           )}
           

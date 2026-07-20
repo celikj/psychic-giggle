@@ -1,19 +1,22 @@
 import type { Task, Daily, Habit } from '../types';
 
 export const LIMITS = {
-  FREE_DAILIES: 2,
-  FREE_HABITS: 2,
-  FREE_LOCKING_TASKS_PER_DAY: 1,
+  FREE_LOCKING_TASKS_PER_DAY: 2,
+  FREE_LOCKING_DAILIES: 2,
 } as const;
 
-export function canAddDaily(dailies: Daily[], isPremium: boolean): boolean {
+export function canAddLockingDaily(dailies: Daily[], isPremium: boolean): boolean {
   if (isPremium) return true;
-  return dailies.length < LIMITS.FREE_DAILIES;
+  const lockingDailies = dailies.filter(d => d.isLocking).length;
+  return lockingDailies < LIMITS.FREE_LOCKING_DAILIES;
 }
 
-export function canAddHabit(habits: Habit[], isPremium: boolean): boolean {
+export function canMakeDailyLocking(dailies: Daily[], dailyId: string, isPremium: boolean): boolean {
   if (isPremium) return true;
-  return habits.length < LIMITS.FREE_HABITS;
+  const existing = dailies.find(d => d.id === dailyId);
+  if (existing?.isLocking) return true;
+  const lockingDailies = dailies.filter(d => d.isLocking).length;
+  return lockingDailies < LIMITS.FREE_LOCKING_DAILIES;
 }
 
 /** 

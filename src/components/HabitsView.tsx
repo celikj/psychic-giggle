@@ -3,7 +3,6 @@ import { Plus, Flame, X, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Habit } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
-import { canAddHabit } from '../lib/monetization';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
 import { hapticTick } from '../lib/haptics';
@@ -57,10 +56,6 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
     if (editingId) {
       editHabit(editingId, { title: title.trim(), emoji, color, targetDays: [...targetDays].sort() });
     } else {
-      if (!canAddHabit(store.habits, monetization.isPremium)) {
-        onShowPaywall();
-        return;
-      }
       addHabit(title.trim(), emoji, color, targetDays);
     }
     resetForm();
@@ -122,13 +117,7 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
               {HABIT_TEMPLATES.map(t => (
                 <button
                   key={t.title}
-                  onClick={() => {
-                    if (!canAddHabit(store.habits, monetization.isPremium)) {
-                      onShowPaywall();
-                      return;
-                    }
-                    addHabit(t.title, t.emoji, t.color, t.targetDays);
-                  }}
+                  onClick={() => addHabit(t.title, t.emoji, t.color, t.targetDays)}
                   className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
                 >
                   <div
