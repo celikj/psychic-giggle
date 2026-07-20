@@ -13,6 +13,7 @@ import {
   computeLast7Days,
   computeOverdueTasks,
   computeWeeklyStats,
+  computeStrictState,
   reorderByIds,
 } from '../lib/storeLogic';
 
@@ -62,6 +63,8 @@ export function useStore() {
   const [dailies, setDailies, dailiesReady] = usePersisted<Daily[]>('tl_dailies', []);
   /** True once tasks/habits/dailies have loaded from disk — gate rendering on this to avoid a flash of the empty default before real data arrives. */
   const ready = tasksReady && habitsReady && dailiesReady;
+
+  const [strictEnabled, setStrictEnabled] = usePersisted<boolean>('tl_strict', false);
 
   const [selectedDate, setSelectedDate] = useState(today);
 
@@ -210,6 +213,10 @@ export function useStore() {
 
   const emergencyActive = !!emergencyPass && emergencyPass.expiresAt > nowMs;
   const emergencyUsedToday = emergencyPass?.date === today;
+
+  // Strict Mode — blocks bypass actions while locking items are pending.
+  // Must be after emergencyPass so we know whether the pass was used today.
+  const strictState = computeStrictState(strictEnabled, lockState, emergencyUsedToday);
   const emergencySecondsLeft = emergencyActive ? Math.ceil((emergencyPass!.expiresAt - nowMs) / 1000) : 0;
 
   const startEmergencyPass = useCallback(() => {
@@ -253,6 +260,9 @@ export function useStore() {
     startEmergencyPass,
     emergencyPassMinutes: EMERGENCY_PASS_MINUTES,
     emergencyPassExpiresAt: emergencyActive ? emergencyPass!.expiresAt : null,
+    strictEnabled,
+    setStrictEnabled,
+    strictState,
     toggleHabit,
     addHabit,
     editHabit,

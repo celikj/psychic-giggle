@@ -218,3 +218,61 @@ export function computeLast7Days(now: Date = new Date()): string[] {
   }
   return days;
 }
+
+// ---- Strict Mode ----
+
+export interface StrictState {
+  /** Strict mode is on AND locking items are pending — all guards enforced. */
+  isActive: boolean;
+  /** False when strict is active: the "Lock until tasks done" toggle is frozen. */
+  canToggleBlocker: boolean;
+  /** False when strict is active: locking items can't be deleted. */
+  canDeleteLockingItem: boolean;
+  /** False when strict is active: the isLocking flag can't be removed from an item. */
+  canRemoveLocking: boolean;
+  /** False when strict is active and the daily pass was already used. */
+  canUseEmergencyPass: boolean;
+  /** Human-readable explanation for disabled controls. */
+  reason: string;
+}
+
+/**
+ * Determines whether Strict Mode is actively enforcing restrictions.
+ *
+ * Strict is "active" when `strictEnabled` is true AND at least one locking
+ * item is still pending today. While active, the user cannot:
+ * - toggle the blocker off
+ * - delete a locking item
+ * - un-mark an item as locking
+ * - use the emergency pass more than once per day
+ *
+ * Once all locking items are done (or at midnight when the day rolls over),
+ * strict lifts and all controls are re-enabled.
+ */
+export function computeStrictState(
+  strictEnabled: boolean,
+  lockState: LockState,
+  emergencyUsedToday: boolean,
+): StrictState {
+  const isActive = strictEnabled && !lockState.allLockingDone && lockState.hasLockingToday;
+
+  if (!isActive) {
+    return {
+      isActive: false,
+      canToggleBlocker: true,
+      canDeleteLockingItem: true,
+      canRemoveLocking: true,
+      canUseEmergencyPass: !emergencyUsedToday,
+      reason: '',
+    };
+  }
+
+  return {
+    isActive: true,
+    canToggleBlocker: false,
+    canDeleteLockingItem: false,
+    canRemoveLocking: false,
+    canUseEmergencyPass: !emergencyUsedToday,
+    reason: 'Strict Mode is active — finish your locking tasks or wait until midnight.',
+  };
+}

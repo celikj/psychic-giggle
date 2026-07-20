@@ -172,6 +172,7 @@ export default function DailiesView({ store }: Props) {
           <ConfirmDeleteButton
             label={`Delete daily "${daily.title}"`}
             warnLocking={due && daily.isLocking && !done}
+            strictBlocked={due && daily.isLocking && !done && store.strictState.isActive}
             onConfirm={() => deleteDaily(daily.id)}
           />
         </div>
@@ -378,7 +379,17 @@ export default function DailiesView({ store }: Props) {
 
             {/* Locking */}
             <button
-              onClick={() => setIsLocking(v => !v)}
+              onClick={() => {
+                // When editing an existing locking daily and strict is active, prevent un-marking isLocking
+                if (editingId && isLocking && store.strictState.isActive) {
+                  const existingDaily = store.dailies.find(d => d.id === editingId);
+                  if (existingDaily?.isLocking && !existingDaily.completedDates.includes(today)) {
+                    window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
+                    return;
+                  }
+                }
+                setIsLocking(v => !v);
+              }}
               className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
                 isLocking
                   ? 'bg-red-500/15 border border-red-500/30 text-red-400'

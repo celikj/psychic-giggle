@@ -245,7 +245,11 @@ export default function TasksView({ store }: Props) {
             <SwipeableRow
               disabled={!!drag}
               onSwipeRight={() => { hapticTick(); toggleTask(task.id); }}
-              onSwipeLeft={() => confirmDelete(task.isLocking && !task.completed, () => deleteTask(task.id))}
+              onSwipeLeft={() => confirmDelete(
+                task.isLocking && !task.completed,
+                () => deleteTask(task.id),
+                task.isLocking && !task.completed && store.strictState.isActive ? true : undefined,
+              )}
               rightHint={<CheckCircle2 className="w-5 h-5 text-green-400" />}
               leftHint={<Trash2 className="w-5 h-5 text-red-400" />}
             >
@@ -307,6 +311,7 @@ export default function TasksView({ store }: Props) {
                 <ConfirmDeleteButton
                   label={`Delete "${task.title}"`}
                   warnLocking={task.isLocking && !task.completed}
+                  strictBlocked={task.isLocking && !task.completed && store.strictState.isActive}
                   onConfirm={() => deleteTask(task.id)}
                 />
               </div>
@@ -354,7 +359,17 @@ export default function TasksView({ store }: Props) {
 
             {/* Locking toggle */}
             <button
-              onClick={() => setNewLocking(v => !v)}
+              onClick={() => {
+                // When editing an existing locking task and strict is active, prevent un-marking isLocking
+                if (editingId && newLocking && store.strictState.isActive) {
+                  const existingTask = store.tasks.find(t => t.id === editingId);
+                  if (existingTask?.isLocking && !existingTask.completed) {
+                    window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
+                    return;
+                  }
+                }
+                setNewLocking(v => !v);
+              }}
               className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
                 newLocking
                   ? 'bg-red-500/15 border border-red-500/30 text-red-400'

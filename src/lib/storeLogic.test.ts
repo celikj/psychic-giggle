@@ -11,6 +11,7 @@ import {
   computeLast7Days,
   computeOverdueTasks,
   computeWeeklyStats,
+  computeStrictState,
   reorderByIds,
 } from './storeLogic';
 
@@ -398,5 +399,88 @@ describe('computeLast7Days', () => {
     expect(days).toHaveLength(7);
     expect(days[6]).toBe(TODAY);
     expect(days[0]).toBe(daysAgo(6));
+  });
+});
+
+describe('computeStrictState', () => {
+  // Helper: build a lock state matching the common scenarios.
+  function lockState(overrides: Partial<ReturnType<typeof computeLockState>> = {}): ReturnType<typeof computeLockState> {
+    return {
+      dueDailies: [],
+      gatingDailies: [],
+      nextGate: null,
+      lockingTasksToday: [],
+      lockingLeft: 0,
+      allLockingDone: true,
+      hasLockingToday: false,
+      ...overrides,
+    };
+  }
+
+  it('all controls are enabled when strict mode is off', () => {
+    const state = computeStrictState(
+      false,
+      lockState({ allLockingDone: false, hasLockingToday: true, lockingLeft: 2 }),
+      false,
+    );
+    expect(state.isActive).toBe(false);
+    expect(state.canToggleBlocker).toBe(true);
+    expect(state.canDeleteLockingItem).toBe(true);
+    expect(state.canRemoveLocking).toBe(true);
+    expect(state.canUseEmergencyPass).toBe(true);
+  });
+
+  it('is not active when strict is on but there are no locking items today', () => {
+    const state = computeStrictState(
+      true,
+      lockState({ allLockingDone: true, hasLockingToday: false }),
+      false,
+    );
+    expect(state.isActive).toBe(false);
+    expect(state.canDeleteLockingItem).toBe(true);
+  });
+
+  it('blocks all controls when strict is on and locking items are pending', () => {
+    const state = computeStrictState(
+      true,
+      lockState({ allLockingDone: false, hasLockingToday: true, lockingLeft: 1 }),
+      false,
+    );
+    expect(state.isActive).toBe(true);
+    expect(state.canToggleBlocker).toBe(false);
+    expect(state.canDeleteLockingItem).toBe(false);
+    expect(state.canRemoveLocking).toBe(false);
+    expect(state.canUseEmergencyPass).toBe(true);
+    expect(state.reason).toContain('Strict Mode');
+  });
+
+  it('lifts restrictions once all locking items are done', () => {
+    const state = computeStrictState(
+      true,
+      lockState({ allLockingDone: true, hasLockingToday: true }),
+      false,
+    );
+    expect(state.isActive).toBe(false);
+    expect(state.canToggleBlocker).toBe(true);
+    expect(state.canDeleteLockingItem).toBe(true);
+  });
+
+  it('emergency pass is blocked when already used today (regardless of strict)', () => {
+    const state = computeStrictState(
+      false,
+      lockState({ allLockingDone: false, hasLockingToday: true }),
+      true,
+    );
+    expect(state.canUseEmergencyPass).toBe(false);
+  });
+
+  it('strict active + emergency already used = pass blocked', () => {
+    const state = computeStrictState(
+      true,
+      lockState({ allLockingDone: false, hasLockingToday: true, lockingLeft: 1 }),
+      true,
+    );
+    expect(state.isActive).toBe(true);
+    expect(state.canUseEmergencyPass).toBe(false);
   });
 });

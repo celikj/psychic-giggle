@@ -272,3 +272,45 @@ test('data survives a reload', async ({ page }) => {
   await page.reload();
   await expect(page.getByText('Persisted task')).toBeVisible();
 });
+
+test.describe('strict mode', () => {
+  test('disables the blocker toggle and prevents deleting locking items', async ({ page }) => {
+    await skipOnboarding(page);
+    
+    // Add a locking task
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Strict task');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    // Enable strict mode in the Blocker tab
+    await page.getByRole('button', { name: 'Blocker' }).click();
+    
+    page.once('dialog', dialog => {
+      expect(dialog.message()).toContain('Strict Mode');
+      dialog.accept();
+    });
+    await page.getByRole('button', { name: 'Toggle strict mode' }).click();
+    
+    // Verify it's active
+    await expect(page.getByText('Active — controls locked until tasks done')).toBeVisible();
+    
+    // Go back to tasks and try to delete the locking task
+    await page.getByRole('button', { name: 'To-Dos' }).click();
+    
+    page.once('dialog', dialog => {
+      expect(dialog.message()).toContain('Strict Mode is active');
+      dialog.accept();
+    });
+    await page.getByRole('button', { name: 'Delete "Strict task"' }).click();
+    // Task should still be there
+    await expect(page.getByText('Strict task')).toBeVisible();
+    
+    // Complete the task
+    await page.getByRole('button', { name: 'Mark "Strict task" as done' }).click();
+    
+    // Go back to Blocker, strict mode should be lifted
+    await page.getByRole('button', { name: 'Blocker' }).click();
+    await expect(page.getByText('Armed — activates when locking items are pending')).toBeVisible();
+  });
+});

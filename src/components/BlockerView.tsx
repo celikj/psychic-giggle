@@ -1,4 +1,4 @@
-import { Lock, Unlock, Shield, ShieldCheck, ChevronRight, Loader2, Smartphone, CheckCircle2, Circle, Clock, LifeBuoy } from 'lucide-react';
+import { Lock, Unlock, Shield, ShieldCheck, ShieldAlert, ChevronRight, Loader2, Smartphone, CheckCircle2, Circle, Clock, LifeBuoy } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { ScreenTimeController } from '../hooks/useScreenTime';
 import { hapticWarning } from '../lib/haptics';
@@ -123,6 +123,72 @@ export default function BlockerView({ store, st }: Props) {
         )}
       </div>
 
+      {/* Strict Mode toggle */}
+      <div className="px-4 mb-4">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                store.strictEnabled
+                  ? store.strictState.isActive
+                    ? 'bg-red-500/15 border border-red-500/25'
+                    : 'bg-amber-500/10 border border-amber-500/20'
+                  : 'bg-white/5 border border-white/10'
+              }`}>
+                <ShieldAlert className={`w-4 h-4 ${
+                  store.strictEnabled
+                    ? store.strictState.isActive ? 'text-red-400' : 'text-amber-400'
+                    : 'text-white/30'
+                }`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white">Strict Mode</p>
+                <p className="text-xs text-white/40">
+                  {store.strictState.isActive
+                    ? 'Active — controls locked until tasks done'
+                    : store.strictEnabled
+                      ? 'Armed — activates when locking items are pending'
+                      : 'Prevents disabling the blocker or deleting locking tasks'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (!store.strictEnabled) {
+                  if (window.confirm(
+                    '⚠️ Strict Mode\n\nWhile locking items are pending, you won\'t be able to:\n\n• Turn off the app blocker\n• Delete locking tasks\n• Remove the locking flag from items\n\nThis resets at midnight. Enable Strict Mode?'
+                  )) {
+                    store.setStrictEnabled(true);
+                  }
+                } else {
+                  if (store.strictState.isActive) {
+                    window.alert(store.strictState.reason);
+                  } else {
+                    store.setStrictEnabled(false);
+                  }
+                }
+              }}
+              className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${
+                store.strictEnabled ? 'bg-red-500' : 'bg-white/15'
+              }`}
+              aria-label="Toggle strict mode"
+            >
+              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${
+                store.strictEnabled ? 'left-6' : 'left-1'
+              }`} />
+            </button>
+          </div>
+          {store.strictState.isActive && (
+            <div className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 bg-red-500/10 border border-red-500/20">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+              <span className="text-[11px] font-semibold text-red-400">
+                Blocker controls are locked until all locking items are done
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Today's locking items */}
       {lockingItems.length > 0 && (
         <div className="px-4 mb-4">
@@ -219,8 +285,15 @@ export default function BlockerView({ store, st }: Props) {
                         </p>
                       </div>
                       <button
-                        onClick={() => st.setEnabled(!st.enabled)}
-                        className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${st.enabled ? 'bg-[#FF6B35]' : 'bg-white/15'}`}
+                        onClick={() => {
+                          if (store.strictState.isActive && !store.strictState.canToggleBlocker) {
+                            window.alert(store.strictState.reason);
+                            return;
+                          }
+                          st.setEnabled(!st.enabled);
+                        }}
+                        disabled={store.strictState.isActive && !store.strictState.canToggleBlocker}
+                        className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${st.enabled ? 'bg-[#FF6B35]' : 'bg-white/15'} ${store.strictState.isActive && !store.strictState.canToggleBlocker ? 'opacity-50 cursor-not-allowed' : ''}`}
                         aria-label="Toggle app blocking"
                       >
                         <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${st.enabled ? 'left-6' : 'left-1'}`} />
