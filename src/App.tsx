@@ -10,6 +10,7 @@ import BlockerView from './components/BlockerView';
 import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import Onboarding from './components/Onboarding';
+import StarterSetup from './components/StarterSetup';
 import { hapticSuccess } from './lib/haptics';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
@@ -96,9 +97,21 @@ export default function App() {
     prevDone.current = store.allLockingDone;
   }, [store.allLockingDone, hadLocking]);
 
+  // First-run routine builder: right after the intro closes, ask a few
+  // questions and turn the answers into starter dailies. Shown once, and only
+  // when there's nothing set up yet (a restored backup shouldn't see it).
+  const [starterDone, setStarterDone] = usePersisted('tl_starter_done', false);
+  const [showStarter, setShowStarter] = useState(false);
+
   const finishIntro = () => {
     setOnboarded(true);
     setShowIntro(false);
+    if (!starterDone && store.dailies.length === 0) setShowStarter(true);
+  };
+
+  const finishStarter = () => {
+    setStarterDone(true);
+    setShowStarter(false);
   };
 
   if (!ready) {
@@ -111,6 +124,7 @@ export default function App() {
       style={{ background: '#0a0a0f', height: '100dvh' }}
     >
       {showIntro && <Onboarding isNativeIOS={st.isNativeIOS} onDone={finishIntro} />}
+      {showStarter && !showIntro && <StarterSetup store={store} onDone={finishStarter} />}
 
       {celebrated && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">

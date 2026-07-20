@@ -2,7 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 
 async function skipOnboarding(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  // First run also offers the starter-routine questions; dismiss those too.
+  await page.getByRole('button', { name: 'Skip for now' }).click();
 }
 
 test.describe('onboarding', () => {
@@ -14,10 +16,35 @@ test.describe('onboarding', () => {
       await page.getByRole('button', { name: 'Next' }).click();
     }
     await page.getByRole('button', { name: 'Get Started' }).click();
+
+    // The intro hands off to the starter-routine questions on first run.
+    await expect(page.getByText('Build your routine')).toBeVisible();
+    await page.getByRole('button', { name: 'Skip for now' }).click();
     await expect(page.getByText('No tasks yet')).toBeVisible();
 
     await page.reload();
     await expect(page.getByText('Welcome to TaskLock')).not.toBeVisible();
+    await expect(page.getByText('Build your routine')).not.toBeVisible();
+  });
+
+  test('starter questions add the selected dailies with their times', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page.getByText('Build your routine')).toBeVisible();
+
+    // "Brush your teeth before bed?" is preselected; say yes to one more.
+    await expect(page.getByRole('button', { name: 'Brush your teeth before bed?' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Make your bed in the morning?' }).click();
+    await page.getByRole('button', { name: 'Add 2 dailies' }).click();
+
+    await page.getByRole('button', { name: 'Dailies' }).click();
+    await expect(page.getByText('Brush teeth')).toBeVisible();
+    await expect(page.getByText('Make the bed')).toBeVisible();
+    await expect(page.getByText('Locks from 9:30 PM')).toBeVisible();
+
+    // One-shot: never comes back, even after replaying the intro.
+    await page.reload();
+    await expect(page.getByText('Build your routine')).not.toBeVisible();
   });
 
   test('Settings > Replay the intro shows it again', async ({ page }) => {
