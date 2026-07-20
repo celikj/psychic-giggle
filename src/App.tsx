@@ -3,6 +3,7 @@ import { useStore } from './hooks/useStore';
 import { useScreenTime } from './hooks/useScreenTime';
 import { useNotifications } from './hooks/useNotifications';
 import { usePersisted } from './hooks/usePersisted';
+import { useMonetization } from './hooks/useMonetization';
 import TasksView from './components/TasksView';
 import DailiesView from './components/DailiesView';
 import HabitsView from './components/HabitsView';
@@ -11,6 +12,7 @@ import SettingsView from './components/SettingsView';
 import BottomNav from './components/BottomNav';
 import Onboarding from './components/Onboarding';
 import StarterSetup from './components/StarterSetup';
+import PaywallView from './components/PaywallView';
 import { hapticSuccess } from './lib/haptics';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
@@ -20,6 +22,9 @@ export default function App() {
   const store = useStore();
   const st = useScreenTime();
   const notif = useNotifications();
+  const monetization = useMonetization();
+
+  const [paywallReason, setPaywallReason] = useState<'daily' | 'habit' | 'locking' | null>(null);
 
   const [onboarded, setOnboarded, onboardedReady] = usePersisted('tl_onboarded', false);
   const [showIntro, setShowIntro] = useState(false);
@@ -32,7 +37,7 @@ export default function App() {
 
   // Splash while the persisted stores hydrate, so nobody sees an empty
   // "no tasks yet" state (or the wrong onboarding decision) for a frame.
-  const ready = store.ready && onboardedReady;
+  const ready = store.ready && onboardedReady && monetization.isReady;
 
   // Keep the OS shield in step with the locking tasks from anywhere in the
   // app — completing the last task on the Tasks tab must unlock immediately,
@@ -136,12 +141,20 @@ export default function App() {
         </div>
       )}
 
+      {paywallReason && (
+        <PaywallView
+          monetization={monetization}
+          reason={paywallReason}
+          onClose={() => setPaywallReason(null)}
+        />
+      )}
+
       <div className="flex-1 overflow-y-auto min-h-0">
-        {activeTab === 'tasks'    && <TasksView store={store} />}
-        {activeTab === 'dailies'  && <DailiesView store={store} />}
-        {activeTab === 'habits'   && <HabitsView store={store} />}
+        {activeTab === 'tasks'    && <TasksView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('locking')} />}
+        {activeTab === 'dailies'  && <DailiesView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('daily')} />}
+        {activeTab === 'habits'   && <HabitsView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('habit')} />}
         {activeTab === 'blocker'  && <BlockerView store={store} st={st} />}
-        {activeTab === 'settings' && <SettingsView store={store} notif={notif} onShowIntro={() => setShowIntro(true)} />}
+        {activeTab === 'settings' && <SettingsView store={store} notif={notif} monetization={monetization} onShowPaywall={() => setPaywallReason('daily')} onShowIntro={() => setShowIntro(true)} />}
       </div>
       <BottomNav
         activeTab={activeTab}

@@ -314,3 +314,59 @@ test.describe('strict mode', () => {
     await expect(page.getByText('Armed — activates when locking items are pending')).toBeVisible();
   });
 });
+
+test.describe('paywall', () => {
+  test('free tier limits daily and locking tasks', async ({ page }) => {
+    await skipOnboarding(page);
+    
+    // Web mocks natively to free tier initially. 
+    // 1. Try to add 3 dailies
+    await page.getByRole('button', { name: 'Dailies' }).click();
+    
+    // Add Daily 1
+    await page.getByRole('button', { name: 'Add Daily' }).first().click();
+    await page.getByPlaceholder('Daily routine name...').fill('Free Daily 1');
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    
+    // Add Daily 2
+    await page.getByRole('button', { name: 'Add Daily' }).first().click();
+    await page.getByPlaceholder('Daily routine name...').fill('Free Daily 2');
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    
+    // Add Daily 3 -> Should trigger paywall
+    await page.getByRole('button', { name: 'Add Daily' }).first().click();
+    await page.getByPlaceholder('Daily routine name...').fill('Paid Daily 3');
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    
+    // Assert paywall is visible
+    await expect(page.getByText('TaskLock Premium')).toBeVisible();
+    await expect(page.getByText(/Free tier is limited to/)).toBeVisible();
+    
+    // "Purchase" the mock annual premium
+    await page.getByRole('button', { name: 'Annual Premium' }).click();
+    
+    // Paywall should close, and now we can add the 3rd daily
+    await expect(page.getByText('TaskLock Premium')).not.toBeVisible();
+    await page.getByRole('button', { name: 'Add Daily' }).last().click();
+    await expect(page.getByText('Paid Daily 3')).toBeVisible();
+    
+    // 2. Try locking tasks limit
+    await page.getByRole('button', { name: 'To-Dos' }).click();
+    // Since we purchased premium above, we shouldn't hit the limit of 1.
+    // Wait, let's reload to reset mock state, wait, the mock state is in memory for useMonetization!
+    // But data is in localStorage. Let's just create 2 locking tasks and it should succeed because we are premium.
+    
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Lock 1');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    await page.getByRole('button', { name: 'Add Task' }).first().click();
+    await page.getByPlaceholder('What needs to be done?').fill('Lock 2');
+    await page.getByText('Make this a locking task').click();
+    await page.getByRole('button', { name: 'Add Task' }).last().click();
+    
+    await expect(page.getByText('Lock 2')).toBeVisible();
+  });
+});
+

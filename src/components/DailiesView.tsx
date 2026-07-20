@@ -1,14 +1,20 @@
 import { useState } from 'react';
-import { Plus, Flame, X, Lock, Clock, ScanBarcode } from 'lucide-react';
+import { Plus, Flame, X, Lock, Clock, ScanBarcode, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
+import type { MonetizationState } from '../hooks/useMonetization';
+import { canAddDaily, LIMITS } from '../lib/monetization';
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
 import { hapticTick } from '../lib/haptics';
 import { DAILY_TEMPLATES } from '../lib/templates';
 
-interface Props { store: Store }
+interface Props { 
+  store: Store;
+  monetization: MonetizationState;
+  onShowPaywall: () => void;
+}
 
 const PRESET_EMOJIS = ['🪥', '🧺', '🍽️', '💊', '🚿', '🐕', '🛏️', '🌱', '📖', '🏃', '🧹', '🎯'];
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -20,7 +26,7 @@ function formatTime(t: string): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function DailiesView({ store }: Props) {
+export default function DailiesView({ store, monetization, onShowPaywall }: Props) {
   const { dailies, today, toggleDaily, addDaily, editDaily, deleteDaily, getDailyStreak, getLast7Days } = store;
 
   const [showAdd, setShowAdd] = useState(false);
@@ -80,6 +86,10 @@ export default function DailiesView({ store }: Props) {
     if (editingId) {
       editDaily(editingId, payload);
     } else {
+      if (!canAddDaily(store.dailies, monetization.isPremium)) {
+        onShowPaywall();
+        return;
+      }
       addDaily(payload);
     }
     resetForm();
@@ -263,7 +273,13 @@ export default function DailiesView({ store }: Props) {
               {DAILY_TEMPLATES.map(t => (
                 <button
                   key={t.title}
-                  onClick={() => addDaily({ title: t.title, emoji: t.emoji, targetDays: t.targetDays, time: t.time, isLocking: t.isLocking })}
+                  onClick={() => {
+                    if (!canAddDaily(store.dailies, monetization.isPremium)) {
+                      onShowPaywall();
+                      return;
+                    }
+                    addDaily({ title: t.title, emoji: t.emoji, targetDays: t.targetDays, time: t.time, isLocking: t.isLocking });
+                  }}
                   className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
                 >
                   <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl flex-shrink-0">

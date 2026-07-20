@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck } from 'lucide-react';
+import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Priority, Task } from '../types';
+import type { MonetizationState } from '../hooks/useMonetization';
+import { canAddLockingTask, canMakeTaskLocking } from '../lib/monetization';
 import CalendarStrip from './CalendarStrip';
 import ConfirmDeleteButton, { confirmDelete } from './ConfirmDeleteButton';
 import EditButton from './EditButton';
@@ -10,6 +12,8 @@ import { hapticTick } from '../lib/haptics';
 
 interface Props {
   store: Store;
+  monetization: MonetizationState;
+  onShowPaywall: () => void;
 }
 
 const PRIORITY_COLOR: Record<Priority, string> = {
@@ -18,7 +22,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   high: '#EF4444',
 };
 
-export default function TasksView({ store }: Props) {
+export default function TasksView({ store, monetization, onShowPaywall }: Props) {
   const {
     todayTasks, completedToday, selectedDate, setSelectedDate, today,
     allLockingDone, lockingLeft, addTask, editTask, toggleTask, deleteTask, getCompletedDates,
@@ -54,6 +58,21 @@ export default function TasksView({ store }: Props) {
 
   const handleSubmit = () => {
     if (!newTitle.trim()) return;
+    
+    if (newLocking) {
+      if (editingId) {
+        if (!canMakeTaskLocking(store.tasks, editingId, store.selectedDate, monetization.isPremium)) {
+          onShowPaywall();
+          return;
+        }
+      } else {
+        if (!canAddLockingTask(store.tasks, store.selectedDate, monetization.isPremium)) {
+          onShowPaywall();
+          return;
+        }
+      }
+    }
+
     if (editingId) {
       editTask(editingId, { title: newTitle.trim(), priority: newPriority, isLocking: newLocking });
     } else {
