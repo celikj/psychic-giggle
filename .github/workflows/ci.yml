@@ -11,6 +11,13 @@ on:
     branches: ['**']
   pull_request:
 
+# A newer push supersedes any still-queued/running CI for the same branch —
+# without this, a runner backlog (or a GitHub Actions outage) piles up stale
+# runs that all execute eventually, burning macOS minutes for nothing.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   web:
     name: Typecheck, unit tests, build & e2e
