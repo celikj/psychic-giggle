@@ -6,8 +6,11 @@ import SwiftUI
 /// snapshot into the App Group whenever the state changes (and asks WidgetKit
 /// to reload), so the widget never has to run any app logic itself.
 
-private let accent = Color(red: 1.0, green: 0.42, blue: 0.208) // #FF6B35
-private let background = Color(red: 0.04, green: 0.04, blue: 0.06) // #0A0A0F
+// Named so they can't collide with View's own `background`/`accentColor`
+// members inside view bodies — unqualified `background` resolves to the
+// modifier method there, not this constant.
+private let tlAccent = Color(red: 1.0, green: 0.42, blue: 0.208) // #FF6B35
+private let tlBackground = Color(red: 0.04, green: 0.04, blue: 0.06) // #0A0A0F
 
 struct LockEntry: TimelineEntry {
     let date: Date
@@ -55,7 +58,7 @@ struct TaskLockWidgetEntryView: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .widgetBackground(background)
+            .widgetBackground(tlBackground)
     }
 
     @ViewBuilder
@@ -71,7 +74,7 @@ struct TaskLockWidgetEntryView: View {
             } else if state.hasLockingToday {
                 statusView(icon: "lock.open.fill", tint: .green, title: "Unlocked", subtitle: "all locking items done")
             } else {
-                statusView(icon: "checkmark.circle.fill", tint: accent, title: "No locks today", subtitle: "enjoy your day")
+                statusView(icon: "checkmark.circle.fill", tint: tlAccent, title: "No locks today", subtitle: "enjoy your day")
             }
         } else {
             statusView(icon: "lock.circle", tint: .gray, title: "TaskLock", subtitle: "open the app to sync")
