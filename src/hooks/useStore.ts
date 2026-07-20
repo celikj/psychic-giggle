@@ -22,7 +22,9 @@ import {
 import { autoBackupToDocuments } from '../lib/backup';
 import { getDeviceLocale, type Locale } from '../lib/i18n';
 
-const EMERGENCY_PASS_MINUTES = 5;
+// 15 minutes is the floor DeviceActivity allows for a scheduled interval, so
+// at this length the native re-lock enforces even if the app is force-quit.
+const EMERGENCY_PASS_MINUTES = 15;
 
 interface EmergencyPass {
   /** Local date the pass was used — it's one per day. */

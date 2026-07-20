@@ -72,8 +72,9 @@ export default function App() {
     if (focusActive) return;
     st.sync((!store.allLockingDone || scheduleActive) && !store.emergencyActive);
 
-    // Natively enforce the emergency pass timeout (survives app kill for
-    // passes ≥15 min; shorter ones re-lock via the app timer + notification).
+    // Natively enforce the emergency pass timeout — at 15 min it re-locks via
+    // DeviceActivity even if the app is force-quit (the timer + notification
+    // are the belt-and-suspenders fallback).
     if (store.emergencyActive) {
       st.startEmergencyPass(store.emergencyPassMinutes);
     }

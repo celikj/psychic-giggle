@@ -382,11 +382,11 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         #endif
     }
 
-    /// Emergency pass: pause the shield now. DeviceActivity intervals have a
-    /// 15-minute floor, so a native re-lock is only scheduled for passes that
-    /// long; the default 5-minute pass re-locks via the app's own timer and
-    /// the "pass ended" local notification (which fire even if the app is in
-    /// the background).
+    /// Emergency pass: pause the shield now and schedule a native re-lock.
+    /// DeviceActivity intervals have a 15-minute floor; the pass is 15 min, so
+    /// the re-lock enforces even if the app is force-quit. (Shorter passes,
+    /// were they ever configured, would fall back to the app timer +
+    /// "pass ended" notification.)
     @objc func startEmergencyPass(_ call: CAPPluginCall) {
         #if canImport(FamilyControls) && canImport(DeviceActivity)
         let minutes = call.getInt("durationMinutes") ?? 5
