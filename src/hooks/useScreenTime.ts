@@ -61,11 +61,11 @@ export function useScreenTime() {
     }
   }, [refresh]);
 
-  const chooseApps = useCallback(async () => {
+  const chooseApps = useCallback(async (type: 'tasks' | 'focus' = 'tasks') => {
     if (!isNativeIOS) return;
     setBusy(true);
     try {
-      await ScreenTime.selectApps();
+      await ScreenTime.selectApps({ type });
     } catch {
       /* cancelled */
     } finally {
@@ -101,6 +101,34 @@ export function useScreenTime() {
     }
   }, []);
 
+  const startFocus = useCallback(async (id: string, endsAt: string) => {
+    if (!isNativeIOS) return;
+    try {
+      await ScreenTime.startFocus({ id, endsAt });
+    } catch { /* ignore */ }
+  }, []);
+
+  const cancelFocus = useCallback(async (id: string) => {
+    if (!isNativeIOS) return;
+    try {
+      await ScreenTime.cancelFocus({ id });
+    } catch { /* ignore */ }
+  }, []);
+
+  const updateScheduledBlocks = useCallback(async (enabled: boolean, blocks: any[]) => {
+    if (!isNativeIOS) return;
+    try {
+      await ScreenTime.updateScheduledBlocks({ enabled, blocks });
+    } catch { /* ignore */ }
+  }, []);
+
+  const startEmergencyPass = useCallback(async (durationMinutes: number) => {
+    if (!isNativeIOS) return;
+    try {
+      await ScreenTime.startEmergencyPass({ durationMinutes });
+    } catch { /* ignore */ }
+  }, []);
+
   /** Keep the OS shield in step with whether locking tasks are still pending. */
   const sync = useCallback(async (shouldBlock: boolean) => {
     if (!isNativeIOS || !enabled) return;
@@ -118,7 +146,11 @@ export function useScreenTime() {
     }
   }, [enabled, status.authorization, status.selectionCount, status.blocking, refresh]);
 
-  return { status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, updateSchedule, updateWidgetState, refresh, isNativeIOS };
+  return { 
+    status, enabled, setEnabled, busy, requestPermission, chooseApps, sync, 
+    updateSchedule, updateWidgetState, refresh, isNativeIOS,
+    startFocus, cancelFocus, updateScheduledBlocks, startEmergencyPass
+  };
 }
 
 export type ScreenTimeController = ReturnType<typeof useScreenTime>;

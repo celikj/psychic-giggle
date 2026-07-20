@@ -35,6 +35,7 @@ public class ScreenTimePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "stopBlocking", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateSchedule", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateWidgetState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startEmergencyPass", returnType: CAPPluginReturnPromise),
     ]
 
     private let selectionKey = "tasklock.familyActivitySelection"

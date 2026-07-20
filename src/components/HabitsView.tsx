@@ -5,6 +5,7 @@ import type { Habit } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
+import ItemStatsModal from './ItemStatsModal';
 import { hapticTick } from '../lib/haptics';
 import { HABIT_TEMPLATES } from '../lib/templates';
 
@@ -23,6 +24,7 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [statsItem, setStatsItem] = useState<Habit | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [color, setColor] = useState('#FF6B35');
@@ -185,6 +187,14 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
                   <span className="text-base">{doneToday ? '✓' : '○'}</span>
                 </button>
 
+                <button
+                  onClick={() => setStatsItem(habit)}
+                  aria-label={`View stats for "${habit.title}"`}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                </button>
+
                 <EditButton label={`Edit habit "${habit.title}"`} onClick={() => startEdit(habit)} />
                 <ConfirmDeleteButton
                   label={`Delete habit "${habit.title}"`}
@@ -340,6 +350,16 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
             Add Habit
           </button>
         </div>
+      )}
+
+      {statsItem && (
+        <ItemStatsModal
+          item={statsItem}
+          today={today}
+          onClose={() => setStatsItem(null)}
+          isPremium={monetization.tier === 'premium'}
+          onShowPaywall={onShowPaywall}
+        />
       )}
     </div>
   );

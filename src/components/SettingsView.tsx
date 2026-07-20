@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays } from 'lucide-react';
+import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud, Globe } from 'lucide-react';
 import type { NotificationsController } from '../hooks/useNotifications';
 import type { Store } from '../hooks/useStore';
 import { useMonetization } from '../hooks/useMonetization';
@@ -179,8 +179,8 @@ export default function SettingsView({ store, notif, onShowIntro }: Props) {
   return (
     <div className="flex flex-col pb-24">
       <div className="px-5 pt-14 pb-4">
-        <h1 className="text-3xl font-bold text-white mb-1">Settings</h1>
-        <p className="text-white/30 text-sm">Your data, your device</p>
+        <h1 className="text-3xl font-bold text-white mb-1">{t(store.locale, 'settingsTitle')}</h1>
+        <p className="text-white/30 text-sm">{t(store.locale, 'settingsSubtitle')}</p>
       </div>
 
       <div className="px-4 space-y-2">
@@ -224,7 +224,44 @@ export default function SettingsView({ store, notif, onShowIntro }: Props) {
           onChange={notif.setEnabled}
         />
 
+        <SectionLabel>Localization</SectionLabel>
+        <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4 flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <RowIcon><Globe className="w-5 h-5 text-indigo-400" /></RowIcon>
+            <p className="text-sm font-semibold text-white">{t(store.locale, 'language')}</p>
+          </div>
+          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl">
+            <button 
+              onClick={() => store.setLocale('en')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${store.locale === 'en' ? 'bg-indigo-500 text-white' : 'text-white/40 hover:text-white'}`}
+            >
+              EN
+            </button>
+            <button 
+              onClick={() => store.setLocale('tr')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${store.locale === 'tr' ? 'bg-indigo-500 text-white' : 'text-white/40 hover:text-white'}`}
+            >
+              TR
+            </button>
+          </div>
+        </div>
+
         <SectionLabel>Backup</SectionLabel>
+        
+        {/* Auto Backup Info */}
+        <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4 flex items-center gap-3 mb-2">
+          <RowIcon><Cloud className="w-5 h-5 text-sky-400" /></RowIcon>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">Auto Backup</p>
+            <p className="text-xs text-white/40 mt-0.5 truncate">
+              {store.lastBackup 
+                ? `Last saved: ${new Date(store.lastBackup).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`
+                : 'Waiting for first save...'}
+            </p>
+          </div>
+          <div className="text-[10px] font-bold text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">iCloud</div>
+        </div>
+
         <Row
           icon={<Download className="w-5 h-5 text-[#FF6B35]" />}
           title="Export data"

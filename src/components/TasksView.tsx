@@ -9,6 +9,7 @@ import ConfirmDeleteButton, { confirmDelete } from './ConfirmDeleteButton';
 import EditButton from './EditButton';
 import SwipeableRow from './SwipeableRow';
 import { hapticTick } from '../lib/haptics';
+import { t } from '../lib/i18n';
 
 interface Props {
   store: Store;
@@ -167,13 +168,13 @@ export default function TasksView({ store, monetization, onShowPaywall }: Props)
               <div className={`w-2 h-2 rounded-full ${allLockingDone ? 'bg-green-400' : 'bg-red-400'}`} />
               <span className="text-xs font-semibold uppercase tracking-widest text-white/40">
                 {allLockingDone
-                  ? 'Apps Unlocked'
-                  : `${lockingLeft} left to unlock`}
+                  ? t(store.locale, 'appsUnlocked')
+                  : `${lockingLeft} ${t(store.locale, 'leftToUnlock')}`}
               </span>
             </div>
             <h1 className="text-3xl font-bold text-white">{formatHeaderDate()}</h1>
             <p className="text-white/30 text-sm mt-0.5">
-              {completedToday} / {todayTasks.length} tasks complete
+              {completedToday} / {todayTasks.length} {t(store.locale, 'tasksComplete')}
             </p>
           </div>
 

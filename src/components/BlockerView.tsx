@@ -2,6 +2,8 @@ import { Lock, Unlock, Shield, ShieldCheck, ShieldAlert, ChevronRight, Loader2, 
 import type { Store } from '../hooks/useStore';
 import type { ScreenTimeController } from '../hooks/useScreenTime';
 import { hapticWarning } from '../lib/haptics';
+import FocusCard from './FocusCard';
+import ScheduledBlocksCard from './ScheduledBlocksCard';
 
 interface Props {
   store: Store;
@@ -335,6 +337,10 @@ export default function BlockerView({ store, st }: Props) {
           </div>
         </div>
       )}
+
+      {/* Focus Sessions & Scheduled Blocks */}
+      <FocusCard store={store} st={st} />
+      <ScheduledBlocksCard store={store} st={st} />
     </div>
   );
 }

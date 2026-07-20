@@ -3,6 +3,8 @@ import type { Task, Habit, Daily, Priority } from '../types';
 import { telemetry } from '../lib/telemetry';
 import { localToday } from '../lib/date';
 import { usePersisted } from './usePersisted';
+import type { FocusSession, ScheduledBlock } from '../lib/focusSessions';
+import { createFocusSession, computeActiveSchedules } from '../lib/focusSessions';
 import {
   minutesOfDay,
   computeLockState,
@@ -17,6 +19,8 @@ import {
   computeStrictState,
   reorderByIds,
 } from '../lib/storeLogic';
+import { autoBackupToDocuments } from '../lib/backup';
+import { getDeviceLocale, type Locale } from '../lib/i18n';
 
 const EMERGENCY_PASS_MINUTES = 5;
 
@@ -66,12 +70,41 @@ export function useStore() {
   const [freezesUsed, setFreezesUsed, freezesReady] = usePersisted<number>('tl_freezes_used', 0);
   const [freezeMonth, setFreezeMonth] = usePersisted<string>('tl_freeze_month', today.substring(0, 7));
   
+  const [focusSession, setFocusSession, focusReady] = usePersisted<FocusSession | null>('tl_focus', null);
+  const [scheduledBlocks, setScheduledBlocks, blocksReady] = usePersisted<ScheduledBlock[]>('tl_schedules', []);
+  const [lastBackup, setLastBackup, backupReady] = usePersisted<string | null>('tl_last_backup', null);
+
   /** True once tasks/habits/dailies have loaded from disk — gate rendering on this to avoid a flash of the empty default before real data arrives. */
-  const ready = tasksReady && habitsReady && dailiesReady && freezesReady;
+  const ready = tasksReady && habitsReady && dailiesReady && freezesReady && focusReady && blocksReady && backupReady;
 
   const [strictEnabled, setStrictEnabled] = usePersisted<boolean>('tl_strict', false);
 
+  const [locale, setLocale] = usePersisted<Locale>('tl_locale', getDeviceLocale());
+
+  interface PendingDelete {
+    type: 'task' | 'habit' | 'daily';
+    item: any; // Task | Habit | Daily
+  }
+  const [pendingDeletes, setPendingDeletes] = useState<PendingDelete[]>([]);
+
   const [selectedDate, setSelectedDate] = useState(today);
+
+  // Auto-backup to Documents (iCloud)
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => {
+      autoBackupToDocuments({
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        tasks,
+        habits,
+        dailies
+      }).then(() => {
+        setLastBackup(new Date().toISOString());
+      });
+    }, 5000); // 5s debounce
+    return () => clearTimeout(t);
+  }, [tasks, habits, dailies, ready, setLastBackup]);
 
   const isDailyDoneToday = useCallback(
     (d: Daily) => d.completedDates.includes(today),
@@ -85,6 +118,9 @@ export function useStore() {
   referenceNow.setHours(Math.floor(nowMinutes / 60), nowMinutes % 60, 0, 0);
   const lockState = computeLockState(tasks, dailies, today, referenceNow);
   const { dueDailies, gatingDailies, nextGate, lockingLeft, allLockingDone, hasLockingToday } = lockState;
+
+  const activeSchedules = computeActiveSchedules(scheduledBlocks, referenceNow);
+  const isScheduleActive = activeSchedules.length > 0;
 
   const todayTasks = tasks.filter(t => t.date === selectedDate);
   const completedToday = todayTasks.filter(t => t.completed).length;
@@ -114,7 +150,12 @@ export function useStore() {
   }, [setTasks]);
 
   const deleteTask = useCallback((id: string) => {
-    setTasks(prev => (Array.isArray(prev) ? prev : []).filter(t => t.id !== id));
+    setTasks(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      const item = arr.find(t => t.id === id);
+      if (item) setPendingDeletes(pd => [...pd, { type: 'task', item }]);
+      return arr.filter(t => t.id !== id);
+    });
   }, [setTasks]);
 
   const overdueTasks = computeOverdueTasks(tasks, today);
@@ -164,7 +205,12 @@ export function useStore() {
   }, [setHabits]);
 
   const deleteHabit = useCallback((id: string) => {
-    setHabits(prev => (Array.isArray(prev) ? prev : []).filter(h => h.id !== id));
+    setHabits(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      const item = arr.find(h => h.id === id);
+      if (item) setPendingDeletes(pd => [...pd, { type: 'habit', item }]);
+      return arr.filter(h => h.id !== id);
+    });
   }, [setHabits]);
 
   const addDaily = useCallback((daily: Omit<Daily, 'id' | 'completedDates'>) => {
@@ -225,7 +271,12 @@ export function useStore() {
   }, [setDailies]);
 
   const deleteDaily = useCallback((id: string) => {
-    setDailies(prev => (Array.isArray(prev) ? prev : []).filter(d => d.id !== id));
+    setDailies(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      const item = arr.find(d => d.id === id);
+      if (item) setPendingDeletes(pd => [...pd, { type: 'daily', item }]);
+      return arr.filter(d => d.id !== id);
+    });
   }, [setDailies]);
 
   const getDailyStreak = useCallback((daily: Daily): number => computeDailyStreak(daily), []);
@@ -278,6 +329,32 @@ export function useStore() {
     setNowMs(Date.now());
     setEmergencyPass({ date: today, expiresAt: Date.now() + EMERGENCY_PASS_MINUTES * 60_000 });
   }, [emergencyPass, today, setEmergencyPass]);
+
+  const startFocus = useCallback((durationMins: number) => {
+    const session = createFocusSession(durationMins);
+    setFocusSession(session);
+    return session;
+  }, [setFocusSession]);
+
+  const cancelFocus = useCallback(() => {
+    setFocusSession(prev => prev ? { ...prev, completed: true } : null);
+  }, [setFocusSession]);
+
+  const addSchedule = useCallback((block: ScheduledBlock) => {
+    setScheduledBlocks(prev => [...prev, block]);
+  }, [setScheduledBlocks]);
+
+  const editSchedule = useCallback((id: string, updates: Partial<ScheduledBlock>) => {
+    setScheduledBlocks(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  }, [setScheduledBlocks]);
+
+  const deleteSchedule = useCallback((id: string) => {
+    setScheduledBlocks(prev => prev.filter(s => s.id !== id));
+  }, [setScheduledBlocks]);
+
+  const toggleSchedule = useCallback((id: string) => {
+    setScheduledBlocks(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
+  }, [setScheduledBlocks]);
 
   return {
     ready,
@@ -333,6 +410,32 @@ export function useStore() {
     getDailyStreak,
     getStreak,
     getLast7Days,
+    focusSession,
+    startFocus,
+    cancelFocus,
+    scheduledBlocks,
+    isScheduleActive,
+    addSchedule,
+    editSchedule,
+    deleteSchedule,
+    toggleSchedule,
+    lastBackup,
+    locale,
+    setLocale,
+    pendingDeletes,
+    undoDelete: useCallback((item: any) => {
+      if (item.date && !item.targetDays) {
+        setTasks(prev => [...prev, item as Task]);
+      } else if (item.targetDays && typeof item.isLocking === 'boolean') {
+        setDailies(prev => [...prev, item as Daily]);
+      } else {
+        setHabits(prev => [...prev, item as Habit]);
+      }
+      setPendingDeletes(pd => pd.filter(p => p.item.id !== item.id));
+    }, [setTasks, setDailies, setHabits]),
+    commitDelete: useCallback((id: string) => {
+      setPendingDeletes(pd => pd.filter(p => p.item.id !== id));
+    }, []),
   };
 }
 

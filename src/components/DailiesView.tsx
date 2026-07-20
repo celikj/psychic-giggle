@@ -7,6 +7,7 @@ import { canAddLockingDaily, canMakeDailyLocking, LIMITS } from '../lib/monetiza
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
+import ItemStatsModal from './ItemStatsModal';
 import { hapticTick } from '../lib/haptics';
 import { DAILY_TEMPLATES } from '../lib/templates';
 
@@ -31,6 +32,7 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [statsItem, setStatsItem] = useState<Daily | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [targetDays, setTargetDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
@@ -180,6 +182,14 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
                 </span>
               )}
             </div>
+          </button>
+
+          <button
+            onClick={() => setStatsItem(daily)}
+            aria-label={`View stats for "${daily.title}"`}
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
           </button>
 
           <EditButton label={`Edit daily "${daily.title}"`} onClick={() => startEdit(daily)} />
@@ -478,6 +488,16 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
             Add Daily
           </button>
         </div>
+      )}
+
+      {statsItem && (
+        <ItemStatsModal
+          item={statsItem}
+          today={today}
+          onClose={() => setStatsItem(null)}
+          isPremium={monetization.tier === 'premium'}
+          onShowPaywall={onShowPaywall}
+        />
       )}
     </div>
   );

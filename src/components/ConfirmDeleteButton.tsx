@@ -17,13 +17,13 @@ export function confirmDelete(warnLocking: boolean | undefined, onConfirm: () =>
     window.alert('Strict Mode is active — you can\'t delete a locking item until your tasks are done or midnight.');
     return;
   }
-  const message = warnLocking
-    ? "This is locking your apps right now — deleting it unlocks them without finishing it. Delete anyway?"
-    : "Delete this? This can't be undone.";
-  if (window.confirm(message)) {
-    hapticDelete();
-    onConfirm();
+  if (warnLocking) {
+    const message = "This is locking your apps right now — deleting it unlocks them without finishing it. Delete anyway?";
+    if (!window.confirm(message)) return;
   }
+  
+  hapticDelete();
+  onConfirm();
 }
 
 export default function ConfirmDeleteButton({ label, onConfirm, warnLocking, strictBlocked }: Props) {

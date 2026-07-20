@@ -102,3 +102,46 @@ export function pickAndRestoreBackup(): Promise<void> {
     input.click();
   });
 }
+
+const AUTO_BACKUP_FILENAME = 'tasklock_auto_backup.json';
+
+/** Writes JSON to app's Documents/ directory (iCloud-backed) */
+export async function autoBackupToDocuments(data: BackupData): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+    await Filesystem.writeFile({
+      path: AUTO_BACKUP_FILENAME,
+      data: JSON.stringify(data),
+      directory: Directory.Documents,
+      encoding: Encoding.UTF8
+    });
+  } catch (err) {
+    console.error('Failed to auto-backup:', err);
+  }
+}
+
+/** Checks if a backup file exists in Documents/ but store is empty */
+export async function checkForExistingBackup(): Promise<BackupData | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+    const result = await Filesystem.readFile({
+      path: AUTO_BACKUP_FILENAME,
+      directory: Directory.Documents,
+      encoding: Encoding.UTF8
+    });
+    
+    // Result data can be string or Blob
+    const dataStr = typeof result.data === 'string' ? result.data : await result.data.text();
+    const parsed = JSON.parse(dataStr);
+    
+    if (isBackupData(parsed)) {
+      return parsed as BackupData;
+    }
+    return null;
+  } catch (err) {
+    // Expected on first launch
+    return null;
+  }
+}

@@ -1,4 +1,6 @@
-import { CheckSquare, CalendarClock, Repeat2, ShieldOff, Settings } from 'lucide-react';
+import { CheckSquare, Repeat, Target, Shield, Settings } from 'lucide-react';
+import { t } from '../lib/i18n';
+import { useStore } from '../hooks/useStore';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
 
@@ -9,15 +11,16 @@ interface Props {
   lockingLeft: number;
 }
 
-const tabs: { id: Tab; label: string; Icon: React.FC<{ className?: string }> }[] = [
-  { id: 'tasks',    label: 'To-Dos',   Icon: CheckSquare },
-  { id: 'dailies',  label: 'Dailies',  Icon: CalendarClock },
-  { id: 'habits',   label: 'Habits',   Icon: Repeat2 },
-  { id: 'blocker',  label: 'Blocker',  Icon: ShieldOff },
-  { id: 'settings', label: 'Settings', Icon: Settings },
-];
-
 export default function BottomNav({ activeTab, setActiveTab, allLockingDone, lockingLeft }: Props) {
+  const store = useStore();
+  const tabs = [
+    { id: 'tasks',    label: t(store.locale, 'tasks'),    Icon: CheckSquare },
+    { id: 'dailies',  label: t(store.locale, 'dailies'),  Icon: Repeat },
+    { id: 'habits',   label: t(store.locale, 'habits'),   Icon: Target },
+    { id: 'blocker',  label: t(store.locale, 'blocker'),  Icon: Shield },
+    { id: 'settings', label: t(store.locale, 'settings'), Icon: Settings },
+  ] as const;
+
   return (
     <div
       className="flex-shrink-0 w-full flex items-center justify-around px-1 border-t border-white/5"

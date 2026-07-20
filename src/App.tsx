@@ -13,7 +13,9 @@ import BottomNav from './components/BottomNav';
 import Onboarding from './components/Onboarding';
 import StarterSetup from './components/StarterSetup';
 import PaywallView from './components/PaywallView';
+import UndoToast from './components/UndoToast';
 import { hapticSuccess } from './lib/haptics';
+import { checkForExistingBackup, restoreBackup } from './lib/backup';
 
 type Tab = 'tasks' | 'dailies' | 'habits' | 'blocker' | 'settings';
 
@@ -31,7 +33,24 @@ export default function App() {
   // Decide once, the moment the real value loads — never flash the intro
   // for a returning user, or skip it for a new one, based on the default.
   useEffect(() => {
-    if (onboardedReady) setShowIntro(!onboarded);
+    if (onboardedReady) {
+      if (!onboarded) {
+        checkForExistingBackup().then(backup => {
+          if (backup) {
+            if (window.confirm('Found an existing TaskLock backup in iCloud! Would you like to restore it?')) {
+              restoreBackup(backup).then(() => {
+                setOnboarded(true);
+                window.location.reload();
+              });
+              return;
+            }
+          }
+          setShowIntro(true);
+        });
+      } else {
+        setShowIntro(false);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardedReady]);
 
@@ -45,6 +64,11 @@ export default function App() {
   // the shield; when it expires (the store ticks it down) this re-locks.
   useEffect(() => {
     st.sync(!store.allLockingDone && !store.emergencyActive);
+    
+    // Feature 12: Natively enforce the emergency pass timeout
+    if (store.emergencyActive) {
+      st.startEmergencyPass(5);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.allLockingDone, store.emergencyActive, st.enabled, st.status.authorization, st.status.selectionCount, st.status.blocking]);
 
@@ -212,11 +236,24 @@ export default function App() {
 
       {paywallReason && (
         <PaywallView
+          store={store}
           monetization={monetization}
           reason={paywallReason}
           onClose={() => setPaywallReason(null)}
         />
       )}
+
+      {store.pendingDeletes.map((pd, index) => {
+        if (index !== store.pendingDeletes.length - 1) return null;
+        return (
+          <UndoToast
+            key={pd.item.id}
+            message={`Deleted ${pd.item.title || 'item'}`}
+            onUndo={() => store.undoDelete(pd.item)}
+            onDismiss={() => store.commitDelete(pd.item.id)}
+          />
+        );
+      })}
 
       <div className="flex-1 overflow-y-auto min-h-0">
         {activeTab === 'tasks'    && <TasksView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('locking')} />}

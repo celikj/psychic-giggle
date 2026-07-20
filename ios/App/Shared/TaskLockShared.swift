@@ -30,10 +30,14 @@ enum TaskLockShared {
     static let pendingDatesKey = "tasklock.pendingLockDates"
     static let pendingTimedDatesKey = "tasklock.pendingTimedLockDates"
     static let widgetStateKey = "tasklock.widgetState"
+    
+    static let focusSelectionKey = "tasklock.focusSelection"
+    static let schedSelectionKey = "tasklock.schedSelection"
 
-    /// The one repeating midnight schedule, for all-day locking items.
     static let midnightActivityName = "tasklock.daily"
     private static let timedActivityPrefix = "tasklock.time."
+    private static let focusActivityPrefix = "tasklock.focus."
+    private static let schedActivityPrefix = "tasklock.sched."
 
     static var defaults: UserDefaults? { UserDefaults(suiteName: appGroupId) }
 
@@ -58,6 +62,14 @@ enum TaskLockShared {
         let digits = String(name.dropFirst(timedActivityPrefix.count))
         guard digits.count == 4 else { return nil }
         return "\(digits.prefix(2)):\(digits.suffix(2))"
+    }
+
+    static func focusActivityName(for id: String) -> String {
+        return focusActivityPrefix + id
+    }
+
+    static func schedActivityName(for id: String, day: Int) -> String {
+        return "\(schedActivityPrefix)\(id).\(day)"
     }
 
     static func loadPendingTimedDates() -> [String: [String]] {
@@ -91,14 +103,14 @@ enum TaskLockShared {
     }
 
     #if canImport(FamilyControls)
-    static func loadSelection() -> FamilyActivitySelection? {
-        guard let data = defaults?.data(forKey: selectionKey) else { return nil }
+    static func loadSelection(key: String = selectionKey) -> FamilyActivitySelection? {
+        guard let data = defaults?.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
     }
 
-    static func saveSelection(_ selection: FamilyActivitySelection) {
+    static func saveSelection(_ selection: FamilyActivitySelection, key: String = selectionKey) {
         if let data = try? JSONEncoder().encode(selection) {
-            defaults?.set(data, forKey: selectionKey)
+            defaults?.set(data, forKey: key)
         }
     }
 
