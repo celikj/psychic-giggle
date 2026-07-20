@@ -59,11 +59,19 @@ npm run build:single  # self-contained single-file -> dist-single/index.html
 npm run build:exe     # native executable for the current OS -> release/ (uses Bun)
 ```
 
-## Releases
+## Branches & releases
 
-Pushing a `v*` tag (or running the **Release** workflow manually) builds the
-executables for all platforms and the standalone HTML, then publishes them to a
-GitHub Release. See [`.github/workflows/release.yml`](.github/workflows/release.yml).
+- **`main` — production.** Always shippable; this is what goes to TestFlight /
+  the App Store. Nothing lands here directly: changes arrive by pull request
+  from `develop`, with CI green.
+- **`develop` — integration.** Day-to-day work merges here first. Branch off
+  it for features (`feature/<name>`) or fixes (`fix/<name>`), open a PR back
+  into `develop`, and cut a release by PR'ing `develop` → `main`.
+- **Releasing:** merge `develop` → `main`, tag it (`v1.3.0`, semver), then run
+  the **iOS TestFlight** workflow from `main` with the next build number.
+  Pushing a `v*` tag (or running the **Release** workflow manually) builds the
+  desktop executables and standalone HTML and publishes them to a GitHub
+  Release. See [`.github/workflows/`](.github/workflows/).
 
 ## Stack
 
