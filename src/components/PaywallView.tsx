@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
 import { Sparkles, Check, X, Shield, Clock, ShieldAlert } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { LIMITS } from '../lib/monetization';
+import { telemetry } from '../lib/telemetry';
 
 interface Props {
   monetization: MonetizationState;
@@ -10,6 +13,13 @@ interface Props {
 
 export default function PaywallView({ monetization, onClose, reason }: Props) {
   const { packages, purchase, restore } = monetization;
+
+  // Paired with the 'purchase' signal, this is what turns into a conversion
+  // rate — the metric that actually matters for a paywall.
+  useEffect(() => {
+    telemetry.track('paywallShown', { reason: reason ?? 'unknown' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePurchase = async (pkg: any) => {
     const success = await purchase(pkg);
@@ -107,28 +117,17 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
                   </div>
                 </button>
               ))
+            ) : monetization.isReady ? (
+              <div className="text-center p-4">
+                <p className="text-white/50 text-sm">Packages are not available at this moment. Please check your App Store connection.</p>
+                {/* Fallback for web testing */}
+                {!Capacitor.isNativePlatform() && (
+                  <button onClick={() => handlePurchase({})} className="mt-4 text-[#FF6B35] underline text-xs">Unlock (Web Mock)</button>
+                )}
+              </div>
             ) : (
-              <div className="space-y-3">
-                {/* Fallback mock UI for web / offline */}
-                <button
-                  onClick={() => handlePurchase({})}
-                  className="w-full bg-gradient-to-br from-[#FF6B35] to-orange-500 rounded-2xl p-4 active:scale-[0.98] transition-all shadow-[0_8px_24px_rgba(255,107,53,0.3)] text-left flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-semibold text-white">Annual Premium</p>
-                    <p className="text-xs text-white/80 mt-0.5">7-day free trial</p>
-                  </div>
-                  <p className="font-bold text-lg text-white">$29.99/yr</p>
-                </button>
-                <button
-                  onClick={() => handlePurchase({})}
-                  className="w-full bg-[#141417] border border-white/10 rounded-2xl p-4 active:scale-[0.98] transition-all text-left flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-semibold text-white">Monthly Premium</p>
-                  </div>
-                  <p className="font-bold text-lg text-white">$4.99/mo</p>
-                </button>
+              <div className="text-center p-4 text-white/50 text-sm">
+                Loading products...
               </div>
             )}
           </div>

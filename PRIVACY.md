@@ -32,7 +32,7 @@ We use industry-standard security measures to protect the limited information we
 TaskLock utilizes the following third-party services:
 - **Apple (App Store & Screen Time):** For app distribution, Screen Time API, and subscription billing.
 - **RevenueCat:** For validating and managing premium subscriptions.
-- **TelemetryDeck (or similar):** For collecting anonymous usage data.
+- **Aptabase:** For collecting anonymous usage data.
 
 Please review their respective privacy policies for more details on how they handle your data.
 

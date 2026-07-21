@@ -347,8 +347,10 @@ test.describe('paywall', () => {
     await expect(page.getByText('TaskLock Premium')).toBeVisible();
     await expect(page.getByText(/Free tier is limited to/)).toBeVisible();
     
-    // "Purchase" the mock annual premium
-    await page.getByRole('button', { name: 'Annual Premium' }).click();
+    // "Purchase" via the web-only mock unlock button (no real RevenueCat
+    // packages are available in this suite, so the paywall shows its
+    // no-packages fallback with a web-only mock purchase link).
+    await page.getByRole('button', { name: 'Unlock (Web Mock)' }).click();
     
     // Paywall should close, and now we can add the 3rd daily
     await expect(page.getByText('TaskLock Premium')).not.toBeVisible();
