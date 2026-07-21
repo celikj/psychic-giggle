@@ -4,6 +4,7 @@ import type { NotificationsController } from '../hooks/useNotifications';
 import type { Store } from '../hooks/useStore';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { shareBackup, pickAndRestoreBackup } from '../lib/backup';
+import { openExternal, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../lib/links';
 import { t } from '../lib/i18n';
 import pkgJson from '../../package.json';
 
@@ -290,6 +291,21 @@ export default function SettingsView({ store, notif, monetization, onShowIntro }
             Tasks, dailies, habits, and streaks are stored only on your device. Nothing is uploaded, tracked, or shared.
             Exporting a backup is the only way your data ever leaves it — and only when you choose to.
           </p>
+        </div>
+
+        <div className="flex items-center justify-center gap-4 pt-2">
+          <button
+            onClick={() => openExternal(PRIVACY_POLICY_URL)}
+            className="text-xs font-semibold text-white/30 hover:text-white/50 underline py-1"
+          >
+            Privacy Policy
+          </button>
+          <button
+            onClick={() => openExternal(TERMS_OF_USE_URL)}
+            className="text-xs font-semibold text-white/30 hover:text-white/50 underline py-1"
+          >
+            Terms of Use
+          </button>
         </div>
 
         <div className="flex items-center justify-between px-2 py-3 text-xs text-white/25">
