@@ -72,9 +72,9 @@ export function useMonetization(): MonetizationState {
     setIsPremium(premiumActive);
   };
 
-  const purchase = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
-    if (!Capacitor.isNativePlatform()) {
-      // Mock purchase on web for testing
+  const purchase = useCallback(async (pkg: PurchasesPackage | any): Promise<boolean> => {
+    if (!Capacitor.isNativePlatform() || !pkg.identifier) {
+      // Mock purchase on web for testing, or if fallback UI passed an empty package
       setIsPremium(true);
       telemetry.track('purchase', { type: pkg.packageType || 'MOCK' });
       return true;
