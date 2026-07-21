@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, Square, Timer, ChevronRight, Loader2, Smartphone } from 'lucide-react';
+import { Square, Timer, ChevronRight, Smartphone } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { ScreenTimeController } from '../hooks/useScreenTime';
 import { isFocusActive, focusTimeRemaining } from '../lib/focusSessions';
@@ -19,17 +19,6 @@ export default function FocusCard({ store, st }: { store: Store; st: ScreenTimeC
   const s = remaining % 60;
   const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 
-  const handleStart = async (mins: number) => {
-    store.startFocus(mins);
-    // Use the timeout to allow store to update before passing it?
-    // Actually we can just start it directly. But we need an ID.
-    // store.startFocus sets the session, but we don't have the ID immediately to pass to st.startFocus.
-    // Wait, the id is generated inside startFocus, but the native side needs it.
-    // It's better to just pass the new session from the store!
-  };
-
-  // Wait, if the store creates the session, we don't get the ID synchronously here to call st.startFocus.
-  // I should change store.startFocus to return the created session.
   return (
     <div className="px-4 mt-6">
       <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-5">

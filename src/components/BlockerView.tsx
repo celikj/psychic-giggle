@@ -5,6 +5,7 @@ import type { ScreenTimeController } from '../hooks/useScreenTime';
 import { hapticWarning, hapticTick } from '../lib/haptics';
 import FocusCard from './FocusCard';
 import ScheduledBlocksCard from './ScheduledBlocksCard';
+import ConfirmSheet from './ConfirmSheet';
 
 interface Props {
   store: Store;
@@ -21,6 +22,8 @@ export default function BlockerView({ store, st }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(
     () => store.strictEnabled || store.scheduledBlocks.length > 0,
   );
+  const [showStrictConfirm, setShowStrictConfirm] = useState(false);
+  const [showEmergencyConfirm, setShowEmergencyConfirm] = useState(false);
 
   // Always today's items — the lock state ignores the calendar's selected date.
   const todaysAll = store.tasks.filter(t => t.date === store.today);
@@ -49,7 +52,7 @@ export default function BlockerView({ store, st }: Props) {
   return (
     <div className="flex flex-col pb-6">
       {/* Header */}
-      <div className="px-5 pt-14 pb-6">
+      <div className="px-5 pb-6" style={{ paddingTop: 'max(env(safe-area-inset-top), 56px)' }}>
         <div className="flex items-center gap-3 mb-2">
           <div
             className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
@@ -118,12 +121,7 @@ export default function BlockerView({ store, st }: Props) {
             </p>
           ) : (
             <button
-              onClick={() => {
-                if (window.confirm(`Unlock your apps for ${store.emergencyPassMinutes} minutes? You get one emergency pass per day.`)) {
-                  hapticWarning();
-                  store.startEmergencyPass();
-                }
-              }}
+              onClick={() => setShowEmergencyConfirm(true)}
               className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/50 text-xs font-semibold active:scale-95 transition-transform"
             >
               <LifeBuoy className="w-3.5 h-3.5" />
@@ -331,11 +329,7 @@ export default function BlockerView({ store, st }: Props) {
                 <button
                   onClick={() => {
                     if (!store.strictEnabled) {
-                      if (window.confirm(
-                        '⚠️ Strict Mode\n\nWhile locking items are pending, you won\'t be able to:\n\n• Turn off the app blocker\n• Delete locking tasks\n• Remove the locking flag from items\n\nThis resets at midnight. Enable Strict Mode?'
-                      )) {
-                        store.setStrictEnabled(true);
-                      }
+                      setShowStrictConfirm(true);
                     } else {
                       if (store.strictState.isActive) {
                         window.alert(store.strictState.reason);
@@ -368,6 +362,44 @@ export default function BlockerView({ store, st }: Props) {
           </div>
         )}
       </div>
+
+      {showStrictConfirm && (
+        <ConfirmSheet
+          icon={<ShieldAlert className="w-5 h-5 text-red-400" />}
+          accent="#EF4444"
+          title="Enable Strict Mode?"
+          body={
+            <>
+              While locking items are pending, you won't be able to:
+              <ul className="list-disc list-inside mt-2 space-y-0.5">
+                <li>Turn off the app blocker</li>
+                <li>Delete locking tasks</li>
+                <li>Remove the locking flag from items</li>
+              </ul>
+              <p className="mt-2">This resets at midnight.</p>
+            </>
+          }
+          confirmLabel="Enable"
+          onConfirm={() => { store.setStrictEnabled(true); setShowStrictConfirm(false); }}
+          onCancel={() => setShowStrictConfirm(false)}
+        />
+      )}
+
+      {showEmergencyConfirm && (
+        <ConfirmSheet
+          icon={<LifeBuoy className="w-5 h-5 text-amber-400" />}
+          accent="#FBBF24"
+          title="Use your emergency pass?"
+          body={`Unlocks your apps for ${store.emergencyPassMinutes} minutes. You get one pass per day.`}
+          confirmLabel="Unlock"
+          onConfirm={() => {
+            hapticWarning();
+            store.startEmergencyPass();
+            setShowEmergencyConfirm(false);
+          }}
+          onCancel={() => setShowEmergencyConfirm(false)}
+        />
+      )}
     </div>
   );
 }

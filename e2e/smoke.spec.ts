@@ -246,11 +246,10 @@ test('emergency pass pauses the lock and counts down', async ({ page }) => {
   await page.getByRole('button', { name: 'Add Task' }).last().click();
 
   await page.getByRole('button', { name: 'Blocker' }).click();
-  page.once('dialog', dialog => {
-    expect(dialog.message()).toContain('one emergency pass per day');
-    dialog.accept();
-  });
   await page.getByRole('button', { name: /Emergency pass/ }).click();
+  await expect(page.getByText('Use your emergency pass?')).toBeVisible();
+  await expect(page.getByText(/one pass per day/)).toBeVisible();
+  await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(page.getByText(/apps lock again in/)).toBeVisible();
 });
 
@@ -311,12 +310,10 @@ test.describe('strict mode', () => {
     await page.getByRole('button', { name: 'Blocker' }).click();
     await page.getByRole('button', { name: 'Advanced' }).click();
 
-    page.once('dialog', dialog => {
-      expect(dialog.message()).toContain('Strict Mode');
-      dialog.accept();
-    });
     await page.getByRole('button', { name: 'Toggle strict mode' }).click();
-    
+    await expect(page.getByText('Enable Strict Mode?')).toBeVisible();
+    await page.getByRole('button', { name: 'Enable' }).click();
+
     // Verify it's active
     await expect(page.getByText('Active — controls locked until tasks done')).toBeVisible();
     

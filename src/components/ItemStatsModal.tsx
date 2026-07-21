@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, ChevronLeft, ChevronRight, Target, Flame, Calendar, Trophy } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Target, Flame, Trophy } from 'lucide-react';
 import type { Daily, Habit } from '../types';
 import MonthlyCalendarHeatmap from './MonthlyCalendarHeatmap';
 import { computeItemMonthlyStats } from '../lib/monthlyStats';

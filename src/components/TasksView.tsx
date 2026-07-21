@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck, Crown, ShieldAlert, ChevronRight } from 'lucide-react';
+import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck, ShieldAlert, ChevronRight } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Priority, Task } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
@@ -175,7 +175,7 @@ export default function TasksView({ store, monetization, st, onShowPaywall, onOp
   return (
     <div className="flex flex-col pb-6">
       {/* Header */}
-      <div className="px-5 pt-14 pb-2">
+      <div className="px-5 pb-2" style={{ paddingTop: 'max(env(safe-area-inset-top), 56px)' }}>
         <div className="flex items-start justify-between mb-1">
           <div>
             <div className="flex items-center gap-2 mb-1">

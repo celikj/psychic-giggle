@@ -1,4 +1,4 @@
-import type { Task, Daily, Habit } from '../types';
+import type { Task, Daily } from '../types';
 
 export const LIMITS = {
   FREE_LOCKING_TASKS_PER_DAY: 2,

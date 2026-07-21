@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Plus, Flame, X, Lock, Clock, ScanBarcode, Crown } from 'lucide-react';
+import { Plus, Flame, X, Lock, Clock, ScanBarcode } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
 import type { NotificationsController } from '../hooks/useNotifications';
-import { canAddLockingDaily, canMakeDailyLocking, LIMITS } from '../lib/monetization';
+import { canAddLockingDaily, canMakeDailyLocking } from '../lib/monetization';
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
@@ -286,7 +286,7 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
       )}
 
       {/* Header */}
-      <div className="px-5 pt-14 pb-4">
+      <div className="px-5 pb-4" style={{ paddingTop: 'max(env(safe-area-inset-top), 56px)' }}>
         <h1 className="text-3xl font-bold text-white mb-1">Dailies</h1>
         <p className="text-white/30 text-sm">
           {dueToday.length === 0

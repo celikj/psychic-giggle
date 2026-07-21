@@ -13,7 +13,6 @@ interface Props {
   notif: NotificationsController;
   monetization: MonetizationState;
   onShowIntro: () => void;
-  onShowPaywall?: () => void;
 }
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -181,7 +180,7 @@ export default function SettingsView({ store, notif, monetization, onShowIntro }
 
   return (
     <div className="flex flex-col pb-6">
-      <div className="px-5 pt-14 pb-4">
+      <div className="px-5 pb-4" style={{ paddingTop: 'max(env(safe-area-inset-top), 56px)' }}>
         <h1 className="text-3xl font-bold text-white mb-1">{t(store.locale, 'settingsTitle')}</h1>
         <p className="text-white/30 text-sm">{t(store.locale, 'settingsSubtitle')}</p>
       </div>

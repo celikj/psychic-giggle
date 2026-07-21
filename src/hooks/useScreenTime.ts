@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import ScreenTime, { isNativeIOS, type ScreenTimeStatus } from '../native/screenTime';
 import { usePersisted } from './usePersisted';
+import { telemetry } from '../lib/telemetry';
 
 const DEFAULT_STATUS: ScreenTimeStatus = {
   supported: false,
@@ -18,6 +19,11 @@ export function useScreenTime() {
   const [status, setStatus] = useState<ScreenTimeStatus>(DEFAULT_STATUS);
   const [enabled, setEnabledPersisted] = usePersisted<boolean>('tl_screentime_enabled', false);
   const [busy, setBusy] = useState(false);
+
+  // Activation-funnel milestones — each fires once so the setup drop-off
+  // (grant access -> pick apps) is visible in analytics.
+  const [authorizedTracked, setAuthorizedTracked] = usePersisted('tl_track_authorized', false);
+  const [appsSelectedTracked, setAppsSelectedTracked] = usePersisted('tl_track_apps_selected', false);
 
   const refresh = useCallback(async () => {
     if (!isNativeIOS) return;
@@ -52,27 +58,35 @@ export function useScreenTime() {
     if (!isNativeIOS) return;
     setBusy(true);
     try {
-      await ScreenTime.requestAuthorization();
+      const result = await ScreenTime.requestAuthorization();
+      if (result.authorization === 'approved' && !authorizedTracked) {
+        telemetry.track('screenTimeAuthorized');
+        setAuthorizedTracked(true);
+      }
     } catch {
       /* user declined; refresh reflects it */
     } finally {
       await refresh();
       setBusy(false);
     }
-  }, [refresh]);
+  }, [refresh, authorizedTracked, setAuthorizedTracked]);
 
   const chooseApps = useCallback(async (type: 'tasks' | 'focus' = 'tasks') => {
     if (!isNativeIOS) return;
     setBusy(true);
     try {
-      await ScreenTime.selectApps({ type });
+      const result = await ScreenTime.selectApps({ type });
+      if (type === 'tasks' && result.count > 0 && !appsSelectedTracked) {
+        telemetry.track('appsSelected');
+        setAppsSelectedTracked(true);
+      }
     } catch {
       /* cancelled */
     } finally {
       await refresh();
       setBusy(false);
     }
-  }, [refresh]);
+  }, [refresh, appsSelectedTracked, setAppsSelectedTracked]);
 
   /**
    * Keep the native re-arm schedules in step with which upcoming days (and,
