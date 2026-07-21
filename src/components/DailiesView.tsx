@@ -255,7 +255,7 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
   };
 
   return (
-    <div className="flex flex-col pb-24">
+    <div className="flex flex-col pb-6">
       {/* Verify / capture scanner */}
       {scanTarget && (
         <BarcodeScanner

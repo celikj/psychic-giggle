@@ -47,7 +47,7 @@ export default function BlockerView({ store, st }: Props) {
   const hasSelection = st.status.selectionCount > 0;
 
   return (
-    <div className="flex flex-col pb-24">
+    <div className="flex flex-col pb-6">
       {/* Header */}
       <div className="px-5 pt-14 pb-6">
         <div className="flex items-center gap-3 mb-2">
