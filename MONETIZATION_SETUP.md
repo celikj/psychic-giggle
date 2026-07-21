@@ -1,49 +1,43 @@
-# Monetization setup (RevenueCat + TelemetryDeck)
+# Monetization setup (RevenueCat + Aptabase)
 
 The app's paywall code is already wired; it stays inert (free tier, telemetry
 off) until the keys and store products below exist. Work top to bottom — each
 section depends on the one above it.
 
-## 1. App Store Connect (do first — RevenueCat reads from it)
+## 1. App Store Connect (do first — RevenueCat reads from it) — done ✅
 
-- [ ] **Sign the Paid Applications Agreement.** App Store Connect → Business →
-      Agreements. In-app purchases fail silently without it.
-- [ ] App record exists already: bundle id `com.celikj.tasklock`.
-- [ ] Create a **Subscription Group** with two auto-renewable subscriptions,
-      e.g. `tasklock_monthly` ($4.99/mo) and `tasklock_annual` ($29.99/yr).
-      Add localized name/description and pricing for each.
-- [ ] Generate an **In-App Purchase Key** (Users and Access → Integrations →
-      In-App Purchase). RevenueCat uses it to validate receipts. Download the
-      `.p8` (one-time download) and note the Key ID + Issuer ID.
+- [x] Sign the Paid Applications Agreement.
+- [x] Subscription Group with `tasklock_monthly` / `tasklock_annual` created.
+- [x] In-App Purchase Key generated and uploaded to RevenueCat.
 
-## 2. RevenueCat
+## 2. RevenueCat — done ✅
 
-- [ ] Create a **Project**.
-- [ ] Add an **App** → App Store → bundle id `com.celikj.tasklock`, and upload
-      the In-App Purchase key from step 1.
-- [ ] Copy the app's **public SDK key** (starts with `appl_`). This becomes the
-      `REVENUECAT_APPLE_KEY` GitHub secret.
-- [ ] **Products:** import the two subscriptions from App Store Connect.
-- [ ] **Entitlement:** create one with the identifier **`premium`** (exact —
-      the app checks `customerInfo.entitlements.active['premium']`). Attach
-      both products to it.
-- [ ] **Offering:** create/keep a `default` offering with a monthly and an
-      annual **package** pointing at the two products. The paywall renders
-      `offerings.current.availablePackages`.
+- [x] Project + App created, public SDK key added as `REVENUECAT_APPLE_KEY`.
+- [x] Products, `premium` entitlement, and default offering configured.
+- [x] Verified: a real purchase completes and unlocks premium.
 
-## 3. TelemetryDeck (optional, independent of the above)
+## 3. Aptabase (optional, independent of the above)
 
-- [ ] Create an app in the TelemetryDeck dashboard; copy its **App ID** (UUID).
-      This becomes the `TELEMETRYDECK_APP_ID` GitHub secret.
+Switched from TelemetryDeck — same privacy-first positioning, but a free tier
+4x the size (200k events/mo vs. 50k) and open-source if you ever want to
+self-host for $0. https://aptabase.com
+
+- [ ] Create a project at [aptabase.com](https://aptabase.com), platform
+      "Web" (the app runs inside a Capacitor WKWebView, same situation as any
+      other JS SDK here — not the native Swift/React Native SDKs).
+- [ ] Copy the **App Key** (looks like `A-EU-1234567890` or `A-US-…`). This
+      becomes the `APTABASE_APP_KEY` GitHub secret.
+- [ ] No entitlement/offering/product setup needed — unlike RevenueCat,
+      Aptabase just needs the key to start receiving events.
 
 ## 4. GitHub secrets
 
 Settings → Secrets and variables → Actions → New repository secret:
 
-| Secret name             | Value                                             |
-| ----------------------- | ------------------------------------------------- |
-| `REVENUECAT_APPLE_KEY`  | RevenueCat public Apple SDK key (`appl_…`)         |
-| `TELEMETRYDECK_APP_ID`  | TelemetryDeck App ID (UUID)                        |
+| Secret name             | Value                                       |
+| ------------------------ | -------------------------------------------- |
+| `REVENUECAT_APPLE_KEY`  | RevenueCat public Apple SDK key (`appl_…`)  |
+| `APTABASE_APP_KEY`      | Aptabase App Key (`A-EU-…` / `A-US-…`)      |
 
 These are public client SDK keys (safe to ship in-app); the secret just keeps
 them out of git history and lets you rotate without a code change. The iOS

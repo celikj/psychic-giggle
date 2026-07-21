@@ -1,38 +1,41 @@
-import TelemetryDeck from '@telemetrydeck/sdk';
+import { init, trackEvent } from '@aptabase/web';
+import pkgJson from '../../package.json';
 
-// Injected at build time from the VITE_TELEMETRYDECK_APP_ID env var (set from
-// a GitHub Actions secret in the release build). Empty when unset — telemetry
+// Injected at build time from the VITE_APTABASE_APP_KEY env var (set from a
+// GitHub Actions secret in the release build). Empty when unset — telemetry
 // then stays disabled, which is the correct behaviour for dev/web/CI builds.
-const TELEMETRY_APP_ID = import.meta.env.VITE_TELEMETRYDECK_APP_ID ?? '';
-const IS_DEV = import.meta.env.DEV;
+const APTABASE_APP_KEY = import.meta.env.VITE_APTABASE_APP_KEY ?? '';
 
-let td: TelemetryDeck | null = null;
 let initialized = false;
 
 export const telemetry = {
   init() {
     if (initialized) return;
-    if (!TELEMETRY_APP_ID || TELEMETRY_APP_ID.includes('YOUR')) {
-      // No App ID configured (dev/web/CI) — telemetry stays off.
+    if (!APTABASE_APP_KEY || APTABASE_APP_KEY.includes('YOUR')) {
+      // No App Key configured (dev/web/CI) — telemetry stays off.
       return;
     }
-    
-    td = new TelemetryDeck({
-      appID: TELEMETRY_APP_ID,
-      clientUser: 'anonymous',
-      testMode: IS_DEV,
-    });
-    
-    initialized = true;
+
+    try {
+      // Aptabase manages its own anonymous session identity — no per-device
+      // id to generate or persist ourselves, unlike the previous SDK.
+      init(APTABASE_APP_KEY, { appVersion: pkgJson.version });
+      initialized = true;
+      // The SDK never sends anything on its own — without an explicit first
+      // event, sessions/DAU would show zero activity.
+      this.track('appLaunched');
+    } catch {
+      /* SDK failed to initialize — stay off */
+    }
   },
 
   track(eventName: string, payload?: Record<string, string>) {
-    if (!initialized || !td) return;
-    
+    if (!initialized) return;
+
     try {
-      td.signal(eventName, payload);
+      trackEvent(eventName, payload);
     } catch (e) {
-      console.error('Failed to send telemetry signal', e);
+      console.error('Failed to send telemetry event', e);
     }
   }
 };

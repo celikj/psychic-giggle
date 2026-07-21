@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { Sparkles, Check, X, Shield, Clock, ShieldAlert } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { LIMITS } from '../lib/monetization';
+import { telemetry } from '../lib/telemetry';
 
 interface Props {
   monetization: MonetizationState;
@@ -11,6 +13,13 @@ interface Props {
 
 export default function PaywallView({ monetization, onClose, reason }: Props) {
   const { packages, purchase, restore } = monetization;
+
+  // Paired with the 'purchase' signal, this is what turns into a conversion
+  // rate — the metric that actually matters for a paywall.
+  useEffect(() => {
+    telemetry.track('paywallShown', { reason: reason ?? 'unknown' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePurchase = async (pkg: any) => {
     const success = await purchase(pkg);
