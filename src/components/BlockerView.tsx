@@ -1,7 +1,8 @@
-import { Lock, Unlock, Shield, ShieldCheck, ShieldAlert, ChevronRight, Loader2, Smartphone, CheckCircle2, Circle, Clock, LifeBuoy } from 'lucide-react';
+import { useState } from 'react';
+import { Lock, Unlock, Shield, ShieldCheck, ShieldAlert, ChevronRight, ChevronDown, Loader2, Smartphone, CheckCircle2, Circle, Clock, LifeBuoy, SlidersHorizontal } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { ScreenTimeController } from '../hooks/useScreenTime';
-import { hapticWarning } from '../lib/haptics';
+import { hapticWarning, hapticTick } from '../lib/haptics';
 import FocusCard from './FocusCard';
 import ScheduledBlocksCard from './ScheduledBlocksCard';
 
@@ -13,6 +14,13 @@ interface Props {
 
 export default function BlockerView({ store, st }: Props) {
   const { allLockingDone, lockingLeft } = store;
+  // Strict Mode and Scheduled Blocks are power-user features — tucked behind
+  // a disclosure so first-run users see "am I locked, what unlocks me, set up
+  // blocking" and nothing else. Opens by default once either is already in
+  // use, so returning users don't have to re-expand it every visit.
+  const [showAdvanced, setShowAdvanced] = useState(
+    () => store.strictEnabled || store.scheduledBlocks.length > 0,
+  );
 
   // Always today's items — the lock state ignores the calendar's selected date.
   const todaysAll = store.tasks.filter(t => t.date === store.today);
@@ -123,72 +131,6 @@ export default function BlockerView({ store, st }: Props) {
             </button>
           )
         )}
-      </div>
-
-      {/* Strict Mode toggle */}
-      <div className="px-4 mb-4">
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                store.strictEnabled
-                  ? store.strictState.isActive
-                    ? 'bg-red-500/15 border border-red-500/25'
-                    : 'bg-amber-500/10 border border-amber-500/20'
-                  : 'bg-white/5 border border-white/10'
-              }`}>
-                <ShieldAlert className={`w-4 h-4 ${
-                  store.strictEnabled
-                    ? store.strictState.isActive ? 'text-red-400' : 'text-amber-400'
-                    : 'text-white/30'
-                }`} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-white">Strict Mode</p>
-                <p className="text-xs text-white/40">
-                  {store.strictState.isActive
-                    ? 'Active — controls locked until tasks done'
-                    : store.strictEnabled
-                      ? 'Armed — activates when locking items are pending'
-                      : 'Prevents disabling the blocker or deleting locking tasks'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                if (!store.strictEnabled) {
-                  if (window.confirm(
-                    '⚠️ Strict Mode\n\nWhile locking items are pending, you won\'t be able to:\n\n• Turn off the app blocker\n• Delete locking tasks\n• Remove the locking flag from items\n\nThis resets at midnight. Enable Strict Mode?'
-                  )) {
-                    store.setStrictEnabled(true);
-                  }
-                } else {
-                  if (store.strictState.isActive) {
-                    window.alert(store.strictState.reason);
-                  } else {
-                    store.setStrictEnabled(false);
-                  }
-                }
-              }}
-              className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${
-                store.strictEnabled ? 'bg-red-500' : 'bg-white/15'
-              }`}
-              aria-label="Toggle strict mode"
-            >
-              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${
-                store.strictEnabled ? 'left-6' : 'left-1'
-              }`} />
-            </button>
-          </div>
-          {store.strictState.isActive && (
-            <div className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 bg-red-500/10 border border-red-500/20">
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
-              <span className="text-[11px] font-semibold text-red-400">
-                Blocker controls are locked until all locking items are done
-              </span>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Today's locking items */}
@@ -338,9 +280,94 @@ export default function BlockerView({ store, st }: Props) {
         </div>
       )}
 
-      {/* Focus Sessions & Scheduled Blocks */}
+      {/* Focus Sessions */}
       <FocusCard store={store} st={st} />
-      <ScheduledBlocksCard store={store} st={st} />
+
+      {/* Advanced: Strict Mode + Scheduled Blocks — power-user features, kept
+          out of the way of first-run setup. */}
+      <div className="mt-6">
+        <button
+          onClick={() => { hapticTick(); setShowAdvanced(v => !v); }}
+          className="w-full flex items-center justify-between py-2 px-4"
+          aria-expanded={showAdvanced}
+        >
+          <span className="flex items-center gap-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            Advanced
+          </span>
+          <ChevronDown className={`w-4 h-4 text-white/30 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showAdvanced && (
+          <div className="animate-slide-up">
+            {/* Strict Mode toggle */}
+            <div className="mx-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    store.strictEnabled
+                      ? store.strictState.isActive
+                        ? 'bg-red-500/15 border border-red-500/25'
+                        : 'bg-amber-500/10 border border-amber-500/20'
+                      : 'bg-white/5 border border-white/10'
+                  }`}>
+                    <ShieldAlert className={`w-4 h-4 ${
+                      store.strictEnabled
+                        ? store.strictState.isActive ? 'text-red-400' : 'text-amber-400'
+                        : 'text-white/30'
+                    }`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">Strict Mode</p>
+                    <p className="text-xs text-white/40">
+                      {store.strictState.isActive
+                        ? 'Active — controls locked until tasks done'
+                        : store.strictEnabled
+                          ? 'Armed — activates when locking items are pending'
+                          : 'Prevents disabling the blocker or deleting locking tasks'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!store.strictEnabled) {
+                      if (window.confirm(
+                        '⚠️ Strict Mode\n\nWhile locking items are pending, you won\'t be able to:\n\n• Turn off the app blocker\n• Delete locking tasks\n• Remove the locking flag from items\n\nThis resets at midnight. Enable Strict Mode?'
+                      )) {
+                        store.setStrictEnabled(true);
+                      }
+                    } else {
+                      if (store.strictState.isActive) {
+                        window.alert(store.strictState.reason);
+                      } else {
+                        store.setStrictEnabled(false);
+                      }
+                    }
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${
+                    store.strictEnabled ? 'bg-red-500' : 'bg-white/15'
+                  }`}
+                  aria-label="Toggle strict mode"
+                >
+                  <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${
+                    store.strictEnabled ? 'left-6' : 'left-1'
+                  }`} />
+                </button>
+              </div>
+              {store.strictState.isActive && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 bg-red-500/10 border border-red-500/20">
+                  <ShieldAlert className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                  <span className="text-[11px] font-semibold text-red-400">
+                    Blocker controls are locked until all locking items are done
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <ScheduledBlocksCard store={store} st={st} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

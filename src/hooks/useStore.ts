@@ -20,7 +20,7 @@ import {
   reorderByIds,
 } from '../lib/storeLogic';
 import { autoBackupToDocuments } from '../lib/backup';
-import { getDeviceLocale, type Locale } from '../lib/i18n';
+import { type Locale } from '../lib/i18n';
 
 // 15 minutes is the floor DeviceActivity allows for a scheduled interval, so
 // at this length the native re-lock enforces even if the app is force-quit.
@@ -81,7 +81,11 @@ export function useStore() {
 
   const [strictEnabled, setStrictEnabled] = usePersisted<boolean>('tl_strict', false);
 
-  const [locale, setLocale] = usePersisted<Locale>('tl_locale', getDeviceLocale());
+  // Forced to English for v1: the TR dictionary exists but only a fraction of
+  // the UI reads from it, so both the Settings toggle and device-language
+  // auto-detection are disabled until the translation is complete. Re-enable
+  // by restoring `getDeviceLocale()` as the default and the Settings section.
+  const [locale, setLocale] = usePersisted<Locale>('tl_locale', 'en');
 
   interface PendingDelete {
     type: 'task' | 'habit' | 'daily';

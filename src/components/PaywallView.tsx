@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { LIMITS } from '../lib/monetization';
 import { telemetry } from '../lib/telemetry';
+import { openExternal, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../lib/links';
 
 interface Props {
   monetization: MonetizationState;
@@ -139,6 +140,26 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
             >
               Restore Purchases
             </button>
+            {/* Required on subscription screens (App Review Guideline 3.1.2):
+                auto-renewal disclosure + working Privacy Policy and Terms links. */}
+            <p className="text-center text-[10px] text-white/25 leading-relaxed mt-2 px-4">
+              Subscriptions renew automatically until cancelled. Manage or cancel
+              anytime in your App Store account settings.
+            </p>
+            <div className="flex items-center justify-center gap-4 mt-2">
+              <button
+                onClick={() => openExternal(PRIVACY_POLICY_URL)}
+                className="text-[10px] font-semibold text-white/30 hover:text-white/50 underline py-1"
+              >
+                Privacy Policy
+              </button>
+              <button
+                onClick={() => openExternal(TERMS_OF_USE_URL)}
+                className="text-[10px] font-semibold text-white/30 hover:text-white/50 underline py-1"
+              >
+                Terms of Use
+              </button>
+            </div>
           </div>
         </div>
       </div>

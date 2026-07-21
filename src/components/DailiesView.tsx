@@ -3,17 +3,21 @@ import { Plus, Flame, X, Lock, Clock, ScanBarcode, Crown } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Daily } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
+import type { NotificationsController } from '../hooks/useNotifications';
 import { canAddLockingDaily, canMakeDailyLocking, LIMITS } from '../lib/monetization';
 import BarcodeScanner from './BarcodeScanner';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
 import ItemStatsModal from './ItemStatsModal';
+import NotificationPrompt from './NotificationPrompt';
 import { hapticTick } from '../lib/haptics';
+import { usePersisted } from '../hooks/usePersisted';
 import { DAILY_TEMPLATES } from '../lib/templates';
 
-interface Props { 
+interface Props {
   store: Store;
   monetization: MonetizationState;
+  notif: NotificationsController;
   onShowPaywall: () => void;
 }
 
@@ -27,12 +31,18 @@ function formatTime(t: string): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function DailiesView({ store, monetization, onShowPaywall }: Props) {
+export default function DailiesView({ store, monetization, notif, onShowPaywall }: Props) {
   const { dailies, today, toggleDaily, addDaily, editDaily, deleteDaily, getDailyStreak, getLast7Days } = store;
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statsItem, setStatsItem] = useState<Daily | null>(null);
+
+  // Ask for notification permission at the one moment it's obviously useful:
+  // right after creating the first timed locking daily. Gated so it only
+  // ever fires once, whether or not the user says yes.
+  const [notifPrompted, setNotifPrompted] = usePersisted('tl_notif_prompted', false);
+  const [notifPromptDaily, setNotifPromptDaily] = useState<{ title: string; time: string } | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [targetDays, setTargetDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
@@ -97,6 +107,14 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
         return;
       }
       addDaily(payload);
+
+      if (
+        payload.isLocking && payload.time && !notifPrompted
+        && notif.isNative && notif.permission !== 'denied' && !notif.enabled
+      ) {
+        setNotifPromptDaily({ title: payload.title, time: payload.time });
+        setNotifPrompted(true);
+      }
     }
     resetForm();
   };
@@ -259,6 +277,14 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
         />
       )}
 
+      {notifPromptDaily && (
+        <NotificationPrompt
+          daily={notifPromptDaily}
+          notif={notif}
+          onDone={() => setNotifPromptDaily(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="px-5 pt-14 pb-4">
         <h1 className="text-3xl font-bold text-white mb-1">Dailies</h1>
@@ -283,8 +309,10 @@ export default function DailiesView({ store, monetization, onShowPaywall }: Prop
             <div className="text-center py-8">
               <div className="text-5xl mb-3">🔁</div>
               <p className="text-white/30 text-sm font-medium">No dailies yet</p>
-              <p className="text-white/20 text-xs mt-1">
-                Routines that repeat — set a time, make them lock your apps, even require a barcode scan
+              <p className="text-white/20 text-xs mt-1 max-w-[260px] mx-auto leading-relaxed">
+                Routines that can lock your apps until done — add a time, or
+                require a barcode scan as proof. For plain streaks with no
+                blocking, try Habits instead.
               </p>
             </div>
             <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-2 px-1">

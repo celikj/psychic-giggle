@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud, Globe } from 'lucide-react';
+import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud } from 'lucide-react';
 import type { NotificationsController } from '../hooks/useNotifications';
 import type { Store } from '../hooks/useStore';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { shareBackup, pickAndRestoreBackup } from '../lib/backup';
+import { openExternal, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../lib/links';
 import { t } from '../lib/i18n';
 import pkgJson from '../../package.json';
 
@@ -226,27 +227,9 @@ export default function SettingsView({ store, notif, monetization, onShowIntro }
           onChange={notif.setEnabled}
         />
 
-        <SectionLabel>Localization</SectionLabel>
-        <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4 flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <RowIcon><Globe className="w-5 h-5 text-indigo-400" /></RowIcon>
-            <p className="text-sm font-semibold text-white">{t(store.locale, 'language')}</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl">
-            <button 
-              onClick={() => store.setLocale('en')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${store.locale === 'en' ? 'bg-indigo-500 text-white' : 'text-white/40 hover:text-white'}`}
-            >
-              EN
-            </button>
-            <button 
-              onClick={() => store.setLocale('tr')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${store.locale === 'tr' ? 'bg-indigo-500 text-white' : 'text-white/40 hover:text-white'}`}
-            >
-              TR
-            </button>
-          </div>
-        </div>
+        {/* Language picker hidden for v1 — the TR dictionary is complete but
+            most components don't read from it yet, so the toggle only produced
+            a mixed-language UI. Restore this section when translation is full. */}
 
         <SectionLabel>Backup</SectionLabel>
         
@@ -290,6 +273,21 @@ export default function SettingsView({ store, notif, monetization, onShowIntro }
             Tasks, dailies, habits, and streaks are stored only on your device. Nothing is uploaded, tracked, or shared.
             Exporting a backup is the only way your data ever leaves it — and only when you choose to.
           </p>
+        </div>
+
+        <div className="flex items-center justify-center gap-4 pt-2">
+          <button
+            onClick={() => openExternal(PRIVACY_POLICY_URL)}
+            className="text-xs font-semibold text-white/30 hover:text-white/50 underline py-1"
+          >
+            Privacy Policy
+          </button>
+          <button
+            onClick={() => openExternal(TERMS_OF_USE_URL)}
+            className="text-xs font-semibold text-white/30 hover:text-white/50 underline py-1"
+          >
+            Terms of Use
+          </button>
         </div>
 
         <div className="flex items-center justify-between px-2 py-3 text-xs text-white/25">
