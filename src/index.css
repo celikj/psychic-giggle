@@ -5,6 +5,19 @@
 * {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
+  /* This is an app shell, not a web page — a long-press shouldn't select
+     text or pop up "Copy/Look Up/Share", the way it never does in a native
+     app. Inputs/textareas are exempted below since users still need to
+     select and edit what they type. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input, textarea, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 html, body {
