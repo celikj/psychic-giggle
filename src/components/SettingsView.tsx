@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud, Globe } from 'lucide-react';
+import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud } from 'lucide-react';
 import type { NotificationsController } from '../hooks/useNotifications';
 import type { Store } from '../hooks/useStore';
 import type { MonetizationState } from '../hooks/useMonetization';
@@ -227,27 +227,9 @@ export default function SettingsView({ store, notif, monetization, onShowIntro }
           onChange={notif.setEnabled}
         />
 
-        <SectionLabel>Localization</SectionLabel>
-        <div className="rounded-2xl border border-white/[0.07] bg-[#141417] p-4 flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <RowIcon><Globe className="w-5 h-5 text-indigo-400" /></RowIcon>
-            <p className="text-sm font-semibold text-white">{t(store.locale, 'language')}</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl">
-            <button 
-              onClick={() => store.setLocale('en')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${store.locale === 'en' ? 'bg-indigo-500 text-white' : 'text-white/40 hover:text-white'}`}
-            >
-              EN
-            </button>
-            <button 
-              onClick={() => store.setLocale('tr')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${store.locale === 'tr' ? 'bg-indigo-500 text-white' : 'text-white/40 hover:text-white'}`}
-            >
-              TR
-            </button>
-          </div>
-        </div>
+        {/* Language picker hidden for v1 — the TR dictionary is complete but
+            most components don't read from it yet, so the toggle only produced
+            a mixed-language UI. Restore this section when translation is full. */}
 
         <SectionLabel>Backup</SectionLabel>
         
