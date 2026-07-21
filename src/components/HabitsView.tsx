@@ -86,7 +86,7 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
   };
 
   return (
-    <div className="flex flex-col pb-24">
+    <div className="flex flex-col pb-6">
       {/* Header */}
       <div className="px-5 pt-14 pb-4">
         <h1 className="text-3xl font-bold text-white mb-1">Habits</h1>

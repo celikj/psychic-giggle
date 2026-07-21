@@ -173,7 +173,7 @@ export default function TasksView({ store, monetization, st, onShowPaywall, onOp
   const showSetupCard = setupIncomplete && !setupDismissed;
 
   return (
-    <div className="flex flex-col pb-24">
+    <div className="flex flex-col pb-6">
       {/* Header */}
       <div className="px-5 pt-14 pb-2">
         <div className="flex items-start justify-between mb-1">
