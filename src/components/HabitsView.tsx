@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Flame, X, Crown } from 'lucide-react';
+import { Plus, Flame, X } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Habit } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
@@ -88,7 +88,7 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
   return (
     <div className="flex flex-col pb-6">
       {/* Header */}
-      <div className="px-5 pt-14 pb-4">
+      <div className="px-5 pb-4" style={{ paddingTop: 'max(env(safe-area-inset-top), 56px)' }}>
         <h1 className="text-3xl font-bold text-white mb-1">Habits</h1>
         <p className="text-white/30 text-sm">
           {totalDone} of {habits.length} done today · {overallPct}%

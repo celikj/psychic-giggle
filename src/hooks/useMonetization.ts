@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Purchases, LOG_LEVEL, type CustomerInfo, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { telemetry } from '../lib/telemetry';
@@ -16,6 +16,10 @@ export interface MonetizationState {
   tier: 'free' | 'premium';
   isReady: boolean;
   packages: PurchasesPackage[];
+  /** True once a getOfferings() call has come back with zero packages — lets the paywall offer a retry instead of a dead end. */
+  offeringsFailed: boolean;
+  offeringsLoading: boolean;
+  fetchOfferings: () => Promise<void>;
   purchase: (pkg: PurchasesPackage) => Promise<boolean>;
   restore: () => Promise<boolean>;
 }
@@ -24,6 +28,28 @@ export function useMonetization(): MonetizationState {
   const [isPremium, setIsPremium] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [offeringsFailed, setOfferingsFailed] = useState(false);
+  const [offeringsLoading, setOfferingsLoading] = useState(false);
+  const configuredRef = useRef(false);
+
+  const fetchOfferings = useCallback(async () => {
+    if (!configuredRef.current) return;
+    setOfferingsLoading(true);
+    try {
+      const offerings = await Purchases.getOfferings();
+      if (offerings.current && offerings.current.availablePackages.length !== 0) {
+        setPackages(offerings.current.availablePackages);
+        setOfferingsFailed(false);
+      } else {
+        setOfferingsFailed(true);
+      }
+    } catch (e) {
+      console.error('Error fetching RevenueCat offerings:', e);
+      setOfferingsFailed(true);
+    } finally {
+      setOfferingsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // RevenueCat is only available on native platforms
@@ -48,14 +74,12 @@ export function useMonetization(): MonetizationState {
         if (Capacitor.getPlatform() === 'ios') {
           await Purchases.configure({ apiKey: RC_APPLE_API_KEY });
         }
-        
+        configuredRef.current = true;
+
         const customerInfo = await Purchases.getCustomerInfo();
         checkPremiumStatus(customerInfo.customerInfo);
 
-        const offerings = await Purchases.getOfferings();
-        if (offerings.current && offerings.current.availablePackages.length !== 0) {
-          setPackages(offerings.current.availablePackages);
-        }
+        await fetchOfferings();
       } catch (e) {
         console.error('Error initializing RevenueCat:', e);
       } finally {
@@ -64,7 +88,7 @@ export function useMonetization(): MonetizationState {
     };
 
     init();
-  }, []);
+  }, [fetchOfferings]);
 
   const checkPremiumStatus = (customerInfo: CustomerInfo) => {
     // 'premium' is the default entitlement identifier in RevenueCat, adjust if yours is different
@@ -116,5 +140,15 @@ export function useMonetization(): MonetizationState {
     }
   }, []);
 
-  return { isPremium, tier: isPremium ? 'premium' : 'free', isReady, packages, purchase, restore };
+  return {
+    isPremium,
+    tier: isPremium ? 'premium' : 'free',
+    isReady,
+    packages,
+    offeringsFailed,
+    offeringsLoading,
+    fetchOfferings,
+    purchase,
+    restore,
+  };
 }

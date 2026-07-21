@@ -79,8 +79,7 @@ export function computeDailyStreak(daily: Daily, now: Date = new Date()): number
   let streak = 0;
   const d = new Date(now);
   const dueOn = (dt: Date) => daily.targetDays.includes(dt.getDay());
-  
-  const ds = toLocalDateStr(d);
+
   const doneOn = (dt: Date) => daily.completedDates.includes(toLocalDateStr(dt));
   const frozenOn = (dt: Date) => daily.frozenDates?.includes(toLocalDateStr(dt));
   

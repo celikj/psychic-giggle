@@ -49,7 +49,7 @@ export default function BlockerView({ store, st }: Props) {
   return (
     <div className="flex flex-col pb-6">
       {/* Header */}
-      <div className="px-5 pt-14 pb-6">
+      <div className="px-5 pb-6" style={{ paddingTop: 'max(env(safe-area-inset-top), 56px)' }}>
         <div className="flex items-center gap-3 mb-2">
           <div
             className={`w-12 h-12 rounded-2xl flex items-center justify-center ${

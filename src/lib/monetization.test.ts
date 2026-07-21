@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canAddLockingDaily, canMakeDailyLocking, canAddLockingTask, canMakeTaskLocking, LIMITS } from './monetization';
-import type { Task, Daily, Habit } from '../types';
+import type { Task, Daily } from '../types';
 
 describe('Monetization Logic', () => {
   it('allows adding locking dailies up to the limit', () => {

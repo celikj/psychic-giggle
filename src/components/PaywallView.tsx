@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Sparkles, Check, X, Shield, Clock, ShieldAlert } from 'lucide-react';
+import { Sparkles, Check, X, Shield, Clock, ShieldAlert, Loader2 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { LIMITS } from '../lib/monetization';
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function PaywallView({ monetization, onClose, reason }: Props) {
-  const { packages, purchase, restore } = monetization;
+  const { packages, purchase, restore, offeringsFailed, offeringsLoading, fetchOfferings } = monetization;
 
   // Paired with the 'purchase' signal, this is what turns into a conversion
   // rate — the metric that actually matters for a paywall.
@@ -121,6 +121,16 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
             ) : monetization.isReady ? (
               <div className="text-center p-4">
                 <p className="text-white/50 text-sm">Packages are not available at this moment. Please check your App Store connection.</p>
+                {Capacitor.isNativePlatform() && offeringsFailed && (
+                  <button
+                    onClick={() => fetchOfferings()}
+                    disabled={offeringsLoading}
+                    className="mt-4 flex items-center justify-center gap-1.5 mx-auto text-[#FF6B35] text-xs font-semibold disabled:opacity-50"
+                  >
+                    {offeringsLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Try again
+                  </button>
+                )}
                 {/* Fallback for web testing */}
                 {!Capacitor.isNativePlatform() && (
                   <button onClick={() => handlePurchase({})} className="mt-4 text-[#FF6B35] underline text-xs">Unlock (Web Mock)</button>

@@ -294,7 +294,7 @@ export default function App() {
         {activeTab === 'dailies'  && <DailiesView store={store} monetization={monetization} notif={notif} onShowPaywall={() => setPaywallReason('daily')} />}
         {activeTab === 'habits'   && <HabitsView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('habit')} />}
         {activeTab === 'blocker'  && <BlockerView store={store} st={st} />}
-        {activeTab === 'settings' && <SettingsView store={store} notif={notif} monetization={monetization} onShowPaywall={() => setPaywallReason('daily')} onShowIntro={() => setShowIntro(true)} />}
+        {activeTab === 'settings' && <SettingsView store={store} notif={notif} monetization={monetization} onShowIntro={() => setShowIntro(true)} />}
       </div>
       <BottomNav
         activeTab={activeTab}
