@@ -53,6 +53,21 @@ test.describe('onboarding', () => {
     await page.getByRole('button', { name: 'Replay the intro' }).click();
     await expect(page.getByText('Welcome to TaskLock')).toBeVisible();
   });
+
+  test('landing tab after the starter flow is Dailies, not an empty To-Dos list', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(page.getByText('Build your routine')).toBeVisible();
+
+    // Preselected default (brush teeth) is the only daily added, no tasks
+    // exist yet — landing anywhere but Dailies would drop the user on an
+    // empty "no tasks yet" screen right after they just set up a routine.
+    await page.getByRole('button', { name: 'Add 1 daily' }).click();
+    await expect(page.getByText('Brush teeth')).toBeVisible();
+    // The active nav button gets full opacity; inactive ones are dimmed.
+    await expect(page.getByRole('button', { name: 'Dailies' })).toHaveClass(/opacity-100/);
+    await expect(page.getByRole('button', { name: 'To-Dos' })).toHaveClass(/opacity-40/);
+  });
 });
 
 test.describe('locking to-dos', () => {
@@ -251,6 +266,12 @@ test('weekly stats card counts completions', async ({ page }) => {
   await expect(page.getByRole('img', { name: /Completions per day this week: 0, 0, 0, 0, 0, 0, 1/ })).toBeVisible();
 });
 
+test('tapping the To-Dos progress ring opens stats, since they were otherwise buried in Settings', async ({ page }) => {
+  await skipOnboarding(page);
+  await page.getByRole('button', { name: 'View your stats' }).click();
+  await expect(page.getByText('Done this week')).toBeVisible();
+});
+
 test.describe('settings', () => {
   test('shows the on-device privacy note and export/import rows', async ({ page }) => {
     await skipOnboarding(page);
@@ -285,9 +306,11 @@ test.describe('strict mode', () => {
     await page.getByText('Make this a locking task').click();
     await page.getByRole('button', { name: 'Add Task' }).last().click();
     
-    // Enable strict mode in the Blocker tab
+    // Enable strict mode in the Blocker tab — it lives behind the collapsed
+    // "Advanced" disclosure by default.
     await page.getByRole('button', { name: 'Blocker' }).click();
-    
+    await page.getByRole('button', { name: 'Advanced' }).click();
+
     page.once('dialog', dialog => {
       expect(dialog.message()).toContain('Strict Mode');
       dialog.accept();

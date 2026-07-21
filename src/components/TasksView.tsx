@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck, Crown } from 'lucide-react';
+import { Plus, Lock, CheckCircle2, Circle, X, GripVertical, Trash2, CalendarCheck, Crown, ShieldAlert, ChevronRight } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Priority, Task } from '../types';
 import type { MonetizationState } from '../hooks/useMonetization';
+import type { ScreenTimeController } from '../hooks/useScreenTime';
 import { canAddLockingTask, canMakeTaskLocking } from '../lib/monetization';
 import CalendarStrip from './CalendarStrip';
 import ConfirmDeleteButton, { confirmDelete } from './ConfirmDeleteButton';
@@ -14,7 +15,10 @@ import { t } from '../lib/i18n';
 interface Props {
   store: Store;
   monetization: MonetizationState;
+  st: ScreenTimeController;
   onShowPaywall: () => void;
+  onOpenBlocker: () => void;
+  onOpenStats: () => void;
 }
 
 const PRIORITY_COLOR: Record<Priority, string> = {
@@ -23,7 +27,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   high: '#EF4444',
 };
 
-export default function TasksView({ store, monetization, onShowPaywall }: Props) {
+export default function TasksView({ store, monetization, st, onShowPaywall, onOpenBlocker, onOpenStats }: Props) {
   const {
     todayTasks, completedToday, selectedDate, setSelectedDate, today,
     allLockingDone, lockingLeft, addTask, editTask, toggleTask, deleteTask, getCompletedDates,
@@ -158,6 +162,16 @@ export default function TasksView({ store, monetization, onShowPaywall }: Props)
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  // Nothing actually blocks apps until Screen Time is authorized and apps
+  // are picked — without this nudge, a new user can build a whole routine
+  // of "locking" items that lock nothing, and never find out why. Dismiss
+  // is per-visit only (no persisted flag): it should keep coming back for
+  // as long as setup is genuinely unfinished.
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  const setupIncomplete = st.isNativeIOS
+    && (st.status.authorization !== 'approved' || st.status.selectionCount === 0);
+  const showSetupCard = setupIncomplete && !setupDismissed;
+
   return (
     <div className="flex flex-col pb-24">
       {/* Header */}
@@ -178,8 +192,12 @@ export default function TasksView({ store, monetization, onShowPaywall }: Props)
             </p>
           </div>
 
-          {/* Ring progress */}
-          <div className="relative w-14 h-14 flex-shrink-0 mt-1">
+          {/* Ring progress — tap to see the weekly stats it's summarizing */}
+          <button
+            onClick={onOpenStats}
+            aria-label="View your stats"
+            className="relative w-14 h-14 flex-shrink-0 mt-1 active:scale-95 transition-transform"
+          >
             <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
               <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
               <circle
@@ -194,9 +212,38 @@ export default function TasksView({ store, monetization, onShowPaywall }: Props)
             <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
               {pct}%
             </span>
-          </div>
+          </button>
         </div>
       </div>
+
+      {/* Finish-setup nudge: nothing actually blocks apps until this is done */}
+      {showSetupCard && (
+        <div className="px-4 pb-2 animate-slide-up">
+          <div className="w-full flex items-center gap-3 bg-red-500/10 border border-red-500/25 rounded-2xl p-3.5">
+            <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center flex-shrink-0">
+              <ShieldAlert className="w-4 h-4 text-red-400" />
+            </div>
+            <button onClick={onOpenBlocker} className="flex-1 min-w-0 text-left active:scale-[0.98] transition-transform">
+              <p className="text-sm font-semibold text-white">Finish setup to start blocking</p>
+              <p className="text-xs text-white/40 mt-0.5">
+                {st.status.authorization !== 'approved'
+                  ? 'Grant Screen Time access on the Blocker tab'
+                  : 'Choose which apps lock on the Blocker tab'}
+              </p>
+            </button>
+            <button onClick={onOpenBlocker} aria-label="Open Blocker tab" className="flex-shrink-0">
+              <ChevronRight className="w-4 h-4 text-white/30" />
+            </button>
+            <button
+              onClick={() => setSetupDismissed(true)}
+              aria-label="Dismiss"
+              className="p-1 -mr-1 rounded-lg hover:bg-white/10 flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5 text-white/30" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Calendar */}
       <CalendarStrip

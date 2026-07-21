@@ -224,10 +224,28 @@ export default function App() {
     if (!starterDone && store.dailies.length === 0) setShowStarter(true);
   };
 
+  // Smart landing tab: the starter flow's addDaily calls are async state
+  // updates, so `store.dueDailies` isn't updated yet inside finishStarter
+  // itself — a one-shot flag lets an effect make the call once those
+  // dailies have actually landed in the store.
+  const [justFinishedStarter, setJustFinishedStarter] = useState(false);
+
   const finishStarter = () => {
     setStarterDone(true);
     setShowStarter(false);
+    setJustFinishedStarter(true);
   };
+
+  useEffect(() => {
+    if (!justFinishedStarter) return;
+    setJustFinishedStarter(false);
+    // The starter flow just filled Dailies while To-Dos is still empty —
+    // land where the new routine actually is, not on an empty list.
+    if (store.dueDailies.length > 0 && store.todayTasks.length === 0) {
+      setActiveTab('dailies');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justFinishedStarter]);
 
   if (!ready) {
     return <div className="min-h-screen max-w-md mx-auto" style={{ background: '#0a0a0f' }} />;
@@ -272,8 +290,8 @@ export default function App() {
       })}
 
       <div className="flex-1 overflow-y-auto min-h-0">
-        {activeTab === 'tasks'    && <TasksView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('locking')} />}
-        {activeTab === 'dailies'  && <DailiesView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('daily')} />}
+        {activeTab === 'tasks'    && <TasksView store={store} monetization={monetization} st={st} onShowPaywall={() => setPaywallReason('locking')} onOpenBlocker={() => setActiveTab('blocker')} onOpenStats={() => setActiveTab('settings')} />}
+        {activeTab === 'dailies'  && <DailiesView store={store} monetization={monetization} notif={notif} onShowPaywall={() => setPaywallReason('daily')} />}
         {activeTab === 'habits'   && <HabitsView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('habit')} />}
         {activeTab === 'blocker'  && <BlockerView store={store} st={st} />}
         {activeTab === 'settings' && <SettingsView store={store} notif={notif} monetization={monetization} onShowPaywall={() => setPaywallReason('daily')} onShowIntro={() => setShowIntro(true)} />}

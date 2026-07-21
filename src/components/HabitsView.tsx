@@ -110,7 +110,10 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
             <div className="text-center py-8">
               <div className="text-5xl mb-3">🌱</div>
               <p className="text-white/30 text-sm font-medium">No habits yet</p>
-              <p className="text-white/20 text-xs mt-1">Build consistent routines</p>
+              <p className="text-white/20 text-xs mt-1 max-w-[260px] mx-auto leading-relaxed">
+                Simple streak tracking — no times, no app-blocking. Need
+                something that can lock your apps too? Try Dailies instead.
+              </p>
             </div>
             <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-2 px-1">
               Quick start
