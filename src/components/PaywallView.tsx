@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Sparkles, Check, X, Shield, Clock, ShieldAlert, Loader2 } from 'lucide-react';
+import { Sparkles, Check, X, Shield, Clock, ShieldAlert, Loader2, Flame } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { LIMITS } from '../lib/monetization';
@@ -81,6 +81,7 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
             <Feature icon={<Shield className="w-5 h-5" />} text="Unlimited locking tasks" />
             <Feature icon={<Clock className="w-5 h-5" />} text="Unlimited daily routines" />
             <Feature icon={<Sparkles className="w-5 h-5" />} text="Unlimited habits & streaks" />
+            <Feature icon={<Flame className="w-5 h-5" />} text="3 streak freezes a month, not 1" />
             <Feature icon={<Check className="w-5 h-5" />} text="Support indie development" />
           </div>
 

@@ -15,6 +15,7 @@ import StarterSetup from './components/StarterSetup';
 import PaywallView from './components/PaywallView';
 import UndoToast from './components/UndoToast';
 import { hapticSuccess } from './lib/haptics';
+import { telemetry } from './lib/telemetry';
 import { checkForExistingBackup, restoreBackup } from './lib/backup';
 import { isFocusActive, computeActiveSchedules } from './lib/focusSessions';
 
@@ -219,6 +220,7 @@ export default function App() {
   const [showStarter, setShowStarter] = useState(false);
 
   const finishIntro = () => {
+    telemetry.track('onboardingComplete');
     setOnboarded(true);
     setShowIntro(false);
     if (!starterDone && store.dailies.length === 0) setShowStarter(true);

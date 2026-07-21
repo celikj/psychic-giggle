@@ -81,6 +81,16 @@ export function useStore() {
 
   const [strictEnabled, setStrictEnabled] = usePersisted<boolean>('tl_strict', false);
 
+  // Activation-funnel milestone — fires once, whichever kind of locking item
+  // (to-do or daily) is created first.
+  const [, setFirstLockingTracked] = usePersisted('tl_track_first_locking', false);
+  const trackFirstLocking = useCallback(() => {
+    setFirstLockingTracked(tracked => {
+      if (!tracked) telemetry.track('firstLockingItemAdded');
+      return true;
+    });
+  }, [setFirstLockingTracked]);
+
   // Forced to English for v1: the TR dictionary exists but only a fraction of
   // the UI reads from it, so both the Settings toggle and device-language
   // auto-detection are disabled until the translation is complete. Re-enable
@@ -135,11 +145,12 @@ export function useStore() {
 
   const addTask = useCallback((title: string, priority: Priority, isLocking: boolean) => {
     telemetry.track('addTask', { priority, isLocking: isLocking ? 'true' : 'false' });
+    if (isLocking) trackFirstLocking();
     setTasks(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { id: uid(), title, completed: false, date: selectedDate, priority, isLocking },
     ]);
-  }, [selectedDate, setTasks]);
+  }, [selectedDate, setTasks, trackFirstLocking]);
 
   const editTask = useCallback((id: string, updates: { title: string; priority: Priority; isLocking: boolean }) => {
     setTasks(prev => (Array.isArray(prev) ? prev : []).map(t => t.id === id ? { ...t, ...updates } : t));
@@ -221,11 +232,12 @@ export function useStore() {
 
   const addDaily = useCallback((daily: Omit<Daily, 'id' | 'completedDates'>) => {
     telemetry.track('addDaily', { isLocking: daily.isLocking ? 'true' : 'false' });
+    if (daily.isLocking) trackFirstLocking();
     setDailies(prev => [
       ...(Array.isArray(prev) ? prev : []),
       { ...daily, id: uid(), completedDates: [] },
     ]);
-  }, [setDailies]);
+  }, [setDailies, trackFirstLocking]);
 
   const toggleDaily = useCallback((id: string) => {
     setDailies(prev => (Array.isArray(prev) ? prev : []).map(d => {
