@@ -40,6 +40,11 @@ jobs:
 
       - name: Build web assets
         run: npm run build
+        env:
+          # Public client SDK keys, injected from repo secrets so they aren't
+          # committed. Builds still succeed if unset (features self-disable).
+          VITE_REVENUECAT_APPLE_KEY: ${{ secrets.REVENUECAT_APPLE_KEY }}
+          VITE_TELEMETRYDECK_APP_ID: ${{ secrets.TELEMETRYDECK_APP_ID }}
 
       - name: Sync Capacitor iOS project
         run: npx cap sync ios
