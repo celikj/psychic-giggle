@@ -1,8 +1,8 @@
 import type { Task, Daily } from '../types';
 
 export const LIMITS = {
-  FREE_LOCKING_TASKS_PER_DAY: 2,
-  FREE_LOCKING_DAILIES: 2,
+  FREE_LOCKING_TASKS_PER_DAY: 1,
+  FREE_LOCKING_DAILIES: 1,
 } as const;
 
 export function canAddLockingDaily(dailies: Daily[], isPremium: boolean): boolean {

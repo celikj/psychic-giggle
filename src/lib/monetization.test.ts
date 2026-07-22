@@ -26,35 +26,36 @@ describe('Monetization Logic', () => {
   it('limits locking tasks per day', () => {
     const tasks: Task[] = [];
     expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(true);
-    
-    // Add two locking tasks on 01-01
-    tasks.push({ id: 't1', date: '2026-01-01', isLocking: true } as Task);
-    expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(true);
-    tasks.push({ id: 't1_2', date: '2026-01-01', isLocking: true } as Task);
-    
+
+    // Fill up to the limit on 01-01
+    for (let i = 0; i < LIMITS.FREE_LOCKING_TASKS_PER_DAY; i++) {
+      expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(true);
+      tasks.push({ id: `t${i}`, date: '2026-01-01', isLocking: true } as Task);
+    }
+
     // Limit reached for 01-01
     expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(false);
-    
+
     // But other days are fine
     expect(canAddLockingTask(tasks, '2026-01-02', false)).toBe(true);
-    
+
     // Non-locking tasks don't count
     tasks.push({ id: 't2', date: '2026-01-01', isLocking: false } as Task);
     expect(canAddLockingTask(tasks, '2026-01-01', false)).toBe(false); // Still false for new locking ones
-    
+
     // Premium bypasses
     expect(canAddLockingTask(tasks, '2026-01-01', true)).toBe(true);
   });
 
   it('allows editing an existing locking task without hitting limit again', () => {
-    const tasks: Task[] = [
-      { id: 't1', date: '2026-01-01', isLocking: true } as Task,
-      { id: 't1_2', date: '2026-01-01', isLocking: true } as Task,
-    ];
-    
-    // We want to edit 't1' and keep it locking
-    expect(canMakeTaskLocking(tasks, 't1', '2026-01-01', false)).toBe(true);
-    
+    const tasks: Task[] = [];
+    for (let i = 0; i < LIMITS.FREE_LOCKING_TASKS_PER_DAY; i++) {
+      tasks.push({ id: `t${i}`, date: '2026-01-01', isLocking: true } as Task);
+    }
+
+    // We want to edit the first locking task and keep it locking
+    expect(canMakeTaskLocking(tasks, 't0', '2026-01-01', false)).toBe(true);
+
     // We want to edit a non-locking task 't2' to make it locking, but limit is hit
     tasks.push({ id: 't2', date: '2026-01-01', isLocking: false } as Task);
     expect(canMakeTaskLocking(tasks, 't2', '2026-01-01', false)).toBe(false);
