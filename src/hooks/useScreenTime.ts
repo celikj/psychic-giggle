@@ -11,12 +11,24 @@ const DEFAULT_STATUS: ScreenTimeStatus = {
   blocking: false,
 };
 
+// See the VITE_SCREENSHOT_MODE comment in native/screenTime.ts — the real
+// plugin is unreachable in a browser, so screenshot mode seeds a plausible
+// "set up and actively blocking" status instead of the empty default.
+const SCREENSHOT_STATUS: ScreenTimeStatus = {
+  supported: true,
+  authorization: 'approved',
+  selectionCount: 7,
+  blocking: true,
+};
+
 /**
  * Drives the native Screen Time blocker. On non-iOS platforms every action is a
  * no-op so the same UI renders harmlessly in the browser build.
  */
 export function useScreenTime() {
-  const [status, setStatus] = useState<ScreenTimeStatus>(DEFAULT_STATUS);
+  const [status, setStatus] = useState<ScreenTimeStatus>(
+    import.meta.env.VITE_SCREENSHOT_MODE === 'true' ? SCREENSHOT_STATUS : DEFAULT_STATUS,
+  );
   const [enabled, setEnabledPersisted] = usePersisted<boolean>('tl_screentime_enabled', false);
   const [busy, setBusy] = useState(false);
 

@@ -1,6 +1,8 @@
 node_modules
 dist
 dist-single
+dist-screenshots
+store-screenshots
 release
 dist-bin
 launcher/embedded.cjs
