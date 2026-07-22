@@ -341,47 +341,41 @@ test.describe('paywall', () => {
   test('free tier limits daily and locking tasks', async ({ page }) => {
     await skipOnboarding(page);
     
-    // Web mocks natively to free tier initially. 
-    // 1. Try to add 3 locking dailies
+    // Web mocks natively to free tier initially. Free tier allows 1 locking
+    // daily — the 2nd should trigger the paywall.
     await page.getByRole('button', { name: 'Dailies' }).click();
-    
-    // Add Locking Daily 1
+
+    // Add the one free locking daily
     await page.getByRole('button', { name: 'Add Daily' }).first().click();
     await page.getByPlaceholder('Daily routine name...').fill('Locking Daily 1');
     await page.getByText('Make this a locking daily').click();
     await page.getByRole('button', { name: 'Add Daily' }).last().click();
-    
-    // Add Locking Daily 2
+
+    // Add a 2nd locking daily -> should trigger the paywall
     await page.getByRole('button', { name: 'Add Daily' }).first().click();
-    await page.getByPlaceholder('Daily routine name...').fill('Locking Daily 2');
+    await page.getByPlaceholder('Daily routine name...').fill('Paid Daily 2');
     await page.getByText('Make this a locking daily').click();
     await page.getByRole('button', { name: 'Add Daily' }).last().click();
-    
-    // Add Locking Daily 3 -> Should trigger paywall
-    await page.getByRole('button', { name: 'Add Daily' }).first().click();
-    await page.getByPlaceholder('Daily routine name...').fill('Paid Daily 3');
-    await page.getByText('Make this a locking daily').click();
-    await page.getByRole('button', { name: 'Add Daily' }).last().click();
-    
+
     // Assert paywall is visible
     await expect(page.getByText('TaskLock Premium')).toBeVisible();
     await expect(page.getByText(/Free tier is limited to/)).toBeVisible();
-    
+
     // "Purchase" via the web-only mock unlock button (no real RevenueCat
     // packages are available in this suite, so the paywall shows its
     // no-packages fallback with a web-only mock purchase link).
     await page.getByRole('button', { name: 'Unlock (Web Mock)' }).click();
-    
-    // Paywall should close, and now we can add the 3rd daily
+
+    // Paywall should close, and now we can add the 2nd daily
     await expect(page.getByText('TaskLock Premium')).not.toBeVisible();
     await page.getByRole('button', { name: 'Add Daily' }).last().click();
-    await expect(page.getByText('Paid Daily 3')).toBeVisible();
-    
+    await expect(page.getByText('Paid Daily 2')).toBeVisible();
+
     // 2. Try locking tasks limit
     await page.getByRole('button', { name: 'To-Dos' }).click();
-    // Since we purchased premium above, we shouldn't hit the limit of 2.
+    // Since we purchased premium above, we shouldn't hit the free per-day limit.
     // Let's just create 3 locking tasks and it should succeed because we are premium.
-    
+
     await page.getByRole('button', { name: 'Add Task' }).first().click();
     await page.getByPlaceholder('What needs to be done?').fill('Lock 1');
     await page.getByText('Make this a locking task').click();
