@@ -15,11 +15,9 @@ const OUT_DIR = 'store-screenshots';
 const PORT = 4174;
 const BASE_URL = `http://localhost:${PORT}`;
 
-// iPhone only — TaskLock's layout is a fixed phone-width column
-// (max-w-md), unoptimized for iPad's wider canvas, so the app is
-// iPhone-only (TARGETED_DEVICE_FAMILY "1").
 const DEVICES = [
   { name: 'iphone-6.9', width: 440, height: 956, scale: 3 }, // -> 1320x2868px
+  { name: 'ipad-12.9', width: 1024, height: 1366, scale: 2 }, // -> 2048x2732px
 ];
 
 function toLocalDateStr(d) {

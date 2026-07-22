@@ -255,7 +255,7 @@ export default function App() {
 
   return (
     <div
-      className="max-w-md mx-auto relative overflow-hidden animate-slide-up flex flex-col"
+      className="max-w-md md:max-w-2xl lg:max-w-3xl mx-auto relative overflow-hidden animate-slide-up flex flex-col"
       style={{ background: '#0a0a0f', height: '100dvh' }}
     >
       {showIntro && <Onboarding isNativeIOS={st.isNativeIOS} onDone={finishIntro} />}
