@@ -15,7 +15,8 @@
     "build:exe": "npm run build:single && npm run embed && bun build launcher/server.cjs --compile --outfile release/tasklock",
     "start:launcher": "node launcher/server.cjs",
     "sync:ios": "npm run build && npx cap sync ios",
-    "ios": "npm run build && npx cap sync ios && npx cap open ios"
+    "ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "screenshots": "cross-env VITE_SCREENSHOT_MODE=true vite build --outDir dist-screenshots && node scripts/capture-screenshots.mjs"
   },
   "bin": "launcher/server.cjs",
   "dependencies": {

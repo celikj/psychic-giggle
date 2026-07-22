@@ -64,6 +64,10 @@ export interface ScreenTimePlugin {
 // Native impl lives in ios/App/App/ScreenTimePlugin.swift (Family Controls).
 const ScreenTime = registerPlugin<ScreenTimePlugin>('ScreenTime');
 
-export const isNativeIOS = Capacitor.getPlatform() === 'ios';
+// VITE_SCREENSHOT_MODE forces the native-iOS UI path in a plain browser —
+// used only by scripts/capture-screenshots.mjs to render App Store
+// screenshots with Playwright, since the real Screen Time plugin only exists
+// on-device. Never set for a real TestFlight/App Store build.
+export const isNativeIOS = import.meta.env.VITE_SCREENSHOT_MODE === 'true' || Capacitor.getPlatform() === 'ios';
 
 export default ScreenTime;
