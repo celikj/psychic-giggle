@@ -16,7 +16,10 @@ const PORT = 4174;
 const BASE_URL = `http://localhost:${PORT}`;
 
 const DEVICES = [
-  { name: 'iphone-6.9', width: 440, height: 956, scale: 3, bandHeight: 150, fontSize: 30, lineHeight: 37 }, // -> 1320x2868px
+  // App Store Connect only accepts specific exact pixel sizes for screenshots
+  // (confirmed against its own upload validator error, which lists these
+  // four): 1242x2688, 2688x1242, 1284x2778, or 2778x1284 for iPhone.
+  { name: 'iphone-6.7', width: 428, height: 926, scale: 3, bandHeight: 150, fontSize: 30, lineHeight: 37 }, // -> 1284x2778px
   { name: 'ipad-12.9', width: 1024, height: 1366, scale: 2, bandHeight: 210, fontSize: 36, lineHeight: 44 }, // -> 2048x2732px
 ];
 
