@@ -8,7 +8,7 @@
 
 import { chromium } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const OUT_DIR = 'store-screenshots';
@@ -16,9 +16,17 @@ const PORT = 4174;
 const BASE_URL = `http://localhost:${PORT}`;
 
 const DEVICES = [
-  { name: 'iphone-6.9', width: 440, height: 956, scale: 3 }, // -> 1320x2868px
-  { name: 'ipad-12.9', width: 1024, height: 1366, scale: 2 }, // -> 2048x2732px
+  { name: 'iphone-6.9', width: 440, height: 956, scale: 3, bandHeight: 150, fontSize: 30, lineHeight: 37 }, // -> 1320x2868px
+  { name: 'ipad-12.9', width: 1024, height: 1366, scale: 2, bandHeight: 210, fontSize: 36, lineHeight: 44 }, // -> 2048x2732px
 ];
+
+/** Short, benefit-first headlines for the marketing caption band above each screenshot. */
+const CAPTIONS = {
+  '1-blocker': 'Apps stay locked until\nyour work is done',
+  '2-todos': 'Turn any to-do into\na real app lock',
+  '3-dailies': 'Routines that lock apps\nuntil they’re done',
+  '4-habits': 'Build streaks — no\nblocking, just momentum',
+};
 
 function toLocalDateStr(d) {
   const y = d.getFullYear();
@@ -99,12 +107,42 @@ async function waitForServer() {
   throw new Error('preview server never came up');
 }
 
+/** Composites a marketing caption band (app's own dark/orange style) above the raw app screenshot, at the exact full device resolution. */
+async function addCaptionBand(browser, device, pngBuffer, caption) {
+  const appCssHeight = device.height - device.bandHeight;
+  const b64 = pngBuffer.toString('base64');
+  const lines = caption.split('\n');
+
+  const page = await browser.newPage({
+    viewport: { width: device.width, height: device.height },
+    deviceScaleFactor: device.scale,
+  });
+  await page.setContent(`
+    <html><body style="margin:0;padding:0;background:#0a0a0f;width:${device.width}px;height:${device.height}px;overflow:hidden;">
+      <div style="
+        width:100%;height:${device.bandHeight}px;box-sizing:border-box;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        background:#0a0a0f;
+        font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;
+      ">
+        ${lines.map(l => `<div style="color:#fff;font-weight:700;font-size:${device.fontSize}px;line-height:${device.lineHeight}px;text-align:center;">${l}</div>`).join('')}
+        <div style="margin-top:14px;width:56px;height:4px;border-radius:2px;background:linear-gradient(90deg,#FF6B35,#FBBF24);"></div>
+      </div>
+      <img src="data:image/png;base64,${b64}" style="display:block;width:${device.width}px;height:${appCssHeight}px;" />
+    </body></html>
+  `);
+  const composite = await page.screenshot();
+  await page.close();
+  return composite;
+}
+
 async function capture(browser, device) {
   const dir = `${OUT_DIR}/${device.name}`;
   mkdirSync(dir, { recursive: true });
 
+  const appCssHeight = device.height - device.bandHeight;
   const context = await browser.newContext({
-    viewport: { width: device.width, height: device.height },
+    viewport: { width: device.width, height: appCssHeight },
     deviceScaleFactor: device.scale,
     isMobile: true,
     hasTouch: true,
@@ -116,7 +154,9 @@ async function capture(browser, device) {
 
   const shot = async (label) => {
     await page.waitForTimeout(400); // let enter animations settle
-    await page.screenshot({ path: `${dir}/${label}.png` });
+    const raw = await page.screenshot();
+    const composite = await addCaptionBand(browser, device, raw, CAPTIONS[label]);
+    writeFileSync(`${dir}/${label}.png`, composite);
     console.log(`  ${device.name}/${label}.png`);
   };
 
