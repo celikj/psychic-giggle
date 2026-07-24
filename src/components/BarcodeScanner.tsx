@@ -45,10 +45,35 @@ export default function BarcodeScanner({ title, subtitle, expectedCode, onResult
     let cancelled = false;
     (async () => {
       try {
-        const { BrowserMultiFormatReader } = await import('@zxing/browser');
-        const reader = new BrowserMultiFormatReader();
+        const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
+          import('@zxing/browser'),
+          import('@zxing/library'),
+        ]);
+
+        // Without these, ZXing runs default multi-format detection against
+        // whatever camera/resolution the browser happens to pick — noticeably
+        // less reliable than it needs to be for a real product barcode.
+        const hints = new Map();
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF,
+          BarcodeFormat.QR_CODE,
+        ]);
+        const reader = new BrowserMultiFormatReader(hints);
         if (!videoRef.current || cancelled) return;
-        controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, result => {
+
+        const constraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            // @ts-expect-error -- advanced focus constraints aren't in the DOM lib types but are widely supported and safely ignored where not
+            advanced: [{ focusMode: 'continuous' }],
+          },
+        };
+        controls = await reader.decodeFromConstraints(constraints, videoRef.current, result => {
           if (result) handleCode(result.getText());
         });
         if (cancelled) controls.stop();
