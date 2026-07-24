@@ -1,12 +1,7 @@
 node_modules
 dist
-dist-single
 dist-screenshots
 store-screenshots
-release
-dist-bin
-launcher/embedded.cjs
-TaskLock.html
 .DS_Store
 *.local
 test-results
