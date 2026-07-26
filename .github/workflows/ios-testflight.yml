@@ -124,6 +124,66 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}
           ls -la "$RUNNER_TEMP/export"
 
+      - name: Verify Family Controls entitlement in the signed .ipa
+        run: |
+          # App Review rejects Screen Time apps whose *shipped binaries* lack
+          # com.apple.developer.family-controls, even when the .entitlements
+          # sources and the portal capabilities all look correct — the archive
+          # and export steps succeed either way, so this is the only place the
+          # real answer is visible. Fail before upload rather than after review.
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+          WORK="$RUNNER_TEMP/ipa-check"
+          rm -rf "$WORK" && mkdir -p "$WORK"
+          unzip -q "$IPA" -d "$WORK"
+          APP=$(find "$WORK/Payload" -maxdepth 1 -name '*.app' | head -1)
+
+          # Bundles that use the Screen Time APIs and so must carry the
+          # entitlement. TaskLockWidget is deliberately absent: it only reads
+          # shared state from the App Group and needs no Family Controls.
+          REQUIRED="$APP $APP/PlugIns/TaskMonitor.appex $APP/PlugIns/ShieldConfig.appex"
+          MISSING=0
+
+          for BUNDLE in $REQUIRED; do
+            NAME=$(basename "$BUNDLE")
+            echo "── $NAME ─────────────────────────────────"
+            if [ ! -d "$BUNDLE" ]; then
+              echo "  MISSING BUNDLE: $BUNDLE"
+              MISSING=1
+              continue
+            fi
+
+            ENTS=$(codesign -d --entitlements - "$BUNDLE" 2>&1 || true)
+            if echo "$ENTS" | grep -q 'com.apple.developer.family-controls'; then
+              echo "  entitlement:  present in signature"
+            else
+              echo "  entitlement:  *** ABSENT from signature ***"
+              MISSING=1
+            fi
+
+            PROFILE="$BUNDLE/embedded.mobileprovision"
+            if [ -f "$PROFILE" ]; then
+              DECODED=$(security cms -D -i "$PROFILE" 2>/dev/null || true)
+              echo "  profile:      $(echo "$DECODED" | plutil -extract Name raw - 2>/dev/null || echo unknown)"
+              if echo "$DECODED" | grep -q 'com.apple.developer.family-controls'; then
+                echo "  profile ent:  present"
+              else
+                echo "  profile ent:  *** ABSENT from provisioning profile ***"
+                MISSING=1
+              fi
+            else
+              echo "  profile:      no embedded.mobileprovision"
+              MISSING=1
+            fi
+          done
+
+          echo "──────────────────────────────────────────"
+          if [ "$MISSING" -ne 0 ]; then
+            echo "Family Controls entitlement is not fully present in the signed" >&2
+            echo "binaries — uploading this build would be rejected by App Review." >&2
+            exit 1
+          fi
+          echo "All Screen Time bundles carry the Family Controls entitlement."
+
       - name: Upload to TestFlight
         run: |
           IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
