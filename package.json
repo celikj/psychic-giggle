@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "check:entitlements": "node scripts/check-screentime-entitlements.mjs",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "sync:ios": "npm run build && npx cap sync ios",

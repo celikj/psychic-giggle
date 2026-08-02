@@ -124,6 +124,16 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}
           ls -la "$RUNNER_TEMP/export"
 
+      # The export re-signs every bundle with whatever the distribution profile
+      # grants. If Family Controls isn't enabled on an App ID, the entitlement
+      # is silently dropped here and the upload succeeds — App Review is then
+      # the first thing to tell you, days later. Check the actual signed
+      # binaries instead.
+      - name: Verify Family Controls entitlement on the signed .ipa
+        run: |
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+          scripts/verify-ipa-entitlements.sh "$IPA"
+
       - name: Upload to TestFlight
         run: |
           IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)

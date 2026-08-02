@@ -38,4 +38,7 @@ Controls, DeviceActivity, ManagedSettings, WidgetKit) · RevenueCat · Aptabase
 
 ## App Store
 
-Pending review — link coming soon.
+Pending review — link coming soon. See
+[docs/app-store-review.md](docs/app-store-review.md) for the review checklist:
+the Family Controls entitlement each target needs, and the subscription
+metadata App Review requires.

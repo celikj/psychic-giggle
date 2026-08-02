@@ -1,9 +1,11 @@
 import Foundation
 
-#if canImport(FamilyControls)
-import FamilyControls
-import ManagedSettings
-#endif
+// Deliberately free of any Screen Time import: this file is compiled into the
+// widget extension too, and a target that links FamilyControls /
+// ManagedSettings / DeviceActivity must ship the Family Controls entitlement
+// or App Review's automated scan rejects the build. The widget needs none of
+// that — the Screen Time helpers live in TaskLockShield.swift, which only the
+// app and the monitor extension compile.
 
 /// State shared between the main app and the DeviceActivity monitor extension
 /// through the App Group container. The monitor extension runs headless —
@@ -101,25 +103,4 @@ enum TaskLockShared {
         guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
         return (h, m)
     }
-
-    #if canImport(FamilyControls)
-    static func loadSelection(key: String = selectionKey) -> FamilyActivitySelection? {
-        guard let data = defaults?.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
-    }
-
-    static func saveSelection(_ selection: FamilyActivitySelection, key: String = selectionKey) {
-        if let data = try? JSONEncoder().encode(selection) {
-            defaults?.set(data, forKey: key)
-        }
-    }
-
-    static func applyShield(_ selection: FamilyActivitySelection, to store: ManagedSettingsStore) {
-        store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
-        store.shield.applicationCategories = selection.categoryTokens.isEmpty
-            ? nil
-            : .specific(selection.categoryTokens)
-        store.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
-    }
-    #endif
 }
