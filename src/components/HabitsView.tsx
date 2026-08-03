@@ -7,6 +7,7 @@ import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
 import ItemStatsModal from './ItemStatsModal';
 import { hapticTick } from '../lib/haptics';
+import { usePersisted } from '../hooks/usePersisted';
 import { HABIT_TEMPLATES } from '../lib/templates';
 
 interface Props {
@@ -25,6 +26,12 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statsItem, setStatsItem] = useState<Habit | null>(null);
+  // Same as Dailies: the suggestions outlive the empty state, so adding one
+  // doesn't take the rest away with it.
+  const [quickStartHidden, setQuickStartHidden] = usePersisted('tl_quickstart_habits_hidden', false);
+  const remainingTemplates = HABIT_TEMPLATES.filter(
+    t => !habits.some(h => h.title.toLowerCase() === t.title.toLowerCase())
+  );
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [color, setColor] = useState('#FF6B35');
@@ -114,30 +121,6 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
                 Simple streak tracking — no times, no app-blocking. Need
                 something that can lock your apps too? Try Dailies instead.
               </p>
-            </div>
-            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-2 px-1">
-              Quick start
-            </p>
-            <div className="space-y-2">
-              {HABIT_TEMPLATES.map(t => (
-                <button
-                  key={t.title}
-                  onClick={() => addHabit(t.title, t.emoji, t.color, t.targetDays)}
-                  className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
-                >
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                    style={{ backgroundColor: t.color + '22', border: `1.5px solid ${t.color}44` }}
-                  >
-                    {t.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white">{t.title}</p>
-                    <p className="text-xs text-white/40 mt-0.5">{t.subtitle}</p>
-                  </div>
-                  <Plus className="w-4 h-4 text-white/30 flex-shrink-0" />
-                </button>
-              ))}
             </div>
           </div>
         )}
@@ -241,6 +224,44 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
             </div>
           );
         })}
+
+        {!showAdd && !quickStartHidden && remainingTemplates.length > 0 && (
+          <div className="animate-slide-up">
+            <div className="flex items-center justify-between mb-2 px-1 pt-3">
+              <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider">
+                Quick start
+              </p>
+              <button
+                onClick={() => setQuickStartHidden(true)}
+                aria-label="Hide quick start suggestions"
+                className="text-[10px] font-semibold text-white/25 hover:text-white/50 uppercase tracking-wider py-1 px-1"
+              >
+                Hide
+              </button>
+            </div>
+            <div className="space-y-2">
+              {remainingTemplates.map(t => (
+                <button
+                  key={t.title}
+                  onClick={() => addHabit(t.title, t.emoji, t.color, t.targetDays)}
+                  className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                    style={{ backgroundColor: t.color + '22', border: `1.5px solid ${t.color}44` }}
+                  >
+                    {t.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">{t.title}</p>
+                    <p className="text-xs text-white/40 mt-0.5">{t.subtitle}</p>
+                  </div>
+                  <Plus className="w-4 h-4 text-white/30 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Add habit form */}
         {showAdd && (

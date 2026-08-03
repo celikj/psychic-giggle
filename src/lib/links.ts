@@ -4,6 +4,8 @@ import { Browser } from '@capacitor/browser';
 export const PRIVACY_POLICY_URL = 'https://celikj.github.io/tasklock-legal/privacy-policy.html';
 /** Apple's standard EULA — the default Terms of Use for App Store apps without custom terms. */
 export const TERMS_OF_USE_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+/** Apple's own subscription management screen — where cancellations happen. */
+export const MANAGE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
 
 /**
  * Open a URL outside the app shell. In the native app a plain window.open

@@ -42,6 +42,13 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
   // right after creating the first timed locking daily. Gated so it only
   // ever fires once, whether or not the user says yes.
   const [notifPrompted, setNotifPrompted] = usePersisted('tl_notif_prompted', false);
+  // Quick start used to live inside the empty state, so adding the first
+  // suggestion hid the rest of them. It stays until every suggestion has been
+  // added, or the user dismisses it.
+  const [quickStartHidden, setQuickStartHidden] = usePersisted('tl_quickstart_dailies_hidden', false);
+  const remainingTemplates = DAILY_TEMPLATES.filter(
+    t => !dailies.some(d => d.title.toLowerCase() === t.title.toLowerCase())
+  );
   const [notifPromptDaily, setNotifPromptDaily] = useState<{ title: string; time: string } | null>(null);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
@@ -315,11 +322,36 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
                 blocking, try Habits instead.
               </p>
             </div>
-            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-2 px-1">
-              Quick start
+          </div>
+        )}
+
+        {dueToday.map((d, i) => renderCard(d, i, true))}
+
+        {otherDays.length > 0 && (
+          <>
+            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider pt-3 px-1">
+              Not scheduled today
             </p>
+            {otherDays.map((d, i) => renderCard(d, i, false))}
+          </>
+        )}
+
+        {!showAdd && !quickStartHidden && remainingTemplates.length > 0 && (
+          <div className="animate-slide-up">
+            <div className="flex items-center justify-between mb-2 px-1 pt-3">
+              <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider">
+                Quick start
+              </p>
+              <button
+                onClick={() => setQuickStartHidden(true)}
+                aria-label="Hide quick start suggestions"
+                className="text-[10px] font-semibold text-white/25 hover:text-white/50 uppercase tracking-wider py-1 px-1"
+              >
+                Hide
+              </button>
+            </div>
             <div className="space-y-2">
-              {DAILY_TEMPLATES.map(t => (
+              {remainingTemplates.map(t => (
                 <button
                   key={t.title}
                   onClick={() => {
@@ -343,17 +375,6 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
               ))}
             </div>
           </div>
-        )}
-
-        {dueToday.map((d, i) => renderCard(d, i, true))}
-
-        {otherDays.length > 0 && (
-          <>
-            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider pt-3 px-1">
-              Not scheduled today
-            </p>
-            {otherDays.map((d, i) => renderCard(d, i, false))}
-          </>
         )}
 
         {/* Add form */}

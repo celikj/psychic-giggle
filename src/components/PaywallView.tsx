@@ -9,7 +9,8 @@ import { openExternal, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../lib/links
 interface Props {
   monetization: MonetizationState;
   onClose: () => void;
-  reason?: 'daily' | 'habit' | 'locking';
+  /** What brought the user here — 'settings' means they opened it themselves. */
+  reason?: 'daily' | 'habit' | 'locking' | 'settings';
 }
 
 export default function PaywallView({ monetization, onClose, reason }: Props) {
@@ -58,7 +59,9 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
           
           <h1 className="text-3xl font-bold text-white mb-3">TaskLock Premium</h1>
           
-          {reason && (
+          {/* Only when a limit sent them here — opening it from Settings is
+              browsing, not being blocked, so it doesn't lead with a red box. */}
+          {reason && reason !== 'settings' && (
             <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl mb-4 text-left">
               <div className="flex items-center gap-2 mb-2">
                 <ShieldAlert className="w-4 h-4 text-red-400" />

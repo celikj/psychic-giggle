@@ -112,7 +112,7 @@ test.describe('dailies', () => {
     await expect(page.getByText('Apps Unlocked!')).toBeVisible();
   });
 
-  test('a quick-start template adds a preset daily in one tap', async ({ page }) => {
+  test('a quick-start template adds a preset daily, leaving the rest addable', async ({ page }) => {
     await skipOnboarding(page);
     await page.getByRole('button', { name: 'Dailies' }).click();
     await expect(page.getByText('Quick start')).toBeVisible();
@@ -120,7 +120,18 @@ test.describe('dailies', () => {
     await page.getByRole('button', { name: /Brush teeth/ }).click();
     await expect(page.getByText('Brush teeth')).toBeVisible();
     await expect(page.getByText('Locks from 9:00 PM')).toBeVisible();
-    // Once something exists, the empty-state template picker goes away.
+
+    // Adding one used to hide the whole picker, stranding the other
+    // suggestions. The rest stay, and the one just added drops out of them.
+    await expect(page.getByText('Quick start')).toBeVisible();
+    await expect(page.getByText('Every night · 9:00 PM · locking')).not.toBeVisible();
+    await page.getByRole('button', { name: /Walk the dog/ }).click();
+    await expect(page.getByText('Walk the dog')).toBeVisible();
+
+    // Dismissing is the way out, and it sticks across a reload.
+    await page.getByRole('button', { name: 'Hide quick start suggestions' }).click();
+    await expect(page.getByText('Quick start')).not.toBeVisible();
+    await page.reload();
     await expect(page.getByText('Quick start')).not.toBeVisible();
   });
 
@@ -148,13 +159,19 @@ test.describe('dailies', () => {
   });
 });
 
-test('a quick-start template adds a preset habit in one tap', async ({ page }) => {
+test('a quick-start template adds a preset habit, leaving the rest addable', async ({ page }) => {
   await skipOnboarding(page);
   await page.getByRole('button', { name: 'Habits' }).click();
   await expect(page.getByText('Quick start')).toBeVisible();
 
   await page.getByRole('button', { name: /Meditate/ }).click();
   await expect(page.getByText('Meditate')).toBeVisible();
+
+  await expect(page.getByText('Quick start')).toBeVisible();
+  await page.getByRole('button', { name: /Drink water/ }).click();
+  await expect(page.getByText('Drink water')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Hide quick start suggestions' }).click();
   await expect(page.getByText('Quick start')).not.toBeVisible();
 });
 
@@ -281,6 +298,19 @@ test.describe('settings', () => {
     await expect(page.getByRole('button', { name: 'Import data' })).toBeVisible();
     // Not running as a native app in this suite, so reminders can't be enabled here.
     await expect(page.getByText('Available in the iPhone app')).toBeVisible();
+  });
+
+  test('offers Premium directly, without having to hit a limit first', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+
+    await page.getByRole('button', { name: 'Upgrade to TaskLock Premium' }).click();
+    await expect(page.getByText('TaskLock Premium')).toBeVisible();
+    // Opened deliberately rather than by being blocked, so no limits warning.
+    await expect(page.getByText(/Free tier is limited to/)).not.toBeVisible();
+
+    await page.getByRole('button', { name: 'Unlock (Web Mock)' }).click();
+    await expect(page.getByText('Active — unlimited locking tasks and routines')).toBeVisible();
   });
 });
 
