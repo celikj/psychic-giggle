@@ -10,6 +10,47 @@ import { telemetry } from '../lib/telemetry';
 // app runs as free tier (dev/web/CI).
 const RC_APPLE_API_KEY = import.meta.env.VITE_REVENUECAT_APPLE_KEY ?? '';
 
+/**
+ * Shaped like RevenueCat's packages, with the fields the paywall reads: an
+ * annual plan carrying a free trial and a monthly one without, so both
+ * branches of the offer copy are exercised off-device. Web/CI only — never
+ * reachable on a real device, where the SDK supplies the real thing.
+ */
+const WEB_MOCK_PACKAGES = [
+  {
+    identifier: '$rc_annual',
+    packageType: 'ANNUAL',
+    product: {
+      identifier: 'tasklock_premium_annual',
+      title: 'TaskLock Premium',
+      description: 'Unlimited locking tasks and routines',
+      priceString: '$29.99',
+      price: 29.99,
+      subscriptionPeriod: 'P1Y',
+      introPrice: {
+        price: 0,
+        priceString: '$0.00',
+        cycles: 1,
+        periodUnit: 'DAY',
+        periodNumberOfUnits: 7,
+      },
+    },
+  },
+  {
+    identifier: '$rc_monthly',
+    packageType: 'MONTHLY',
+    product: {
+      identifier: 'tasklock_premium_monthly',
+      title: 'TaskLock Premium',
+      description: 'Unlimited locking tasks and routines',
+      priceString: '$4.99',
+      price: 4.99,
+      subscriptionPeriod: 'P1M',
+      introPrice: null,
+    },
+  },
+] as unknown as PurchasesPackage[];
+
 export interface MonetizationState {
   isPremium: boolean;
   /** Convenience mirror of isPremium for gate checks: 'free' | 'premium'. */
@@ -55,6 +96,11 @@ export function useMonetization(): MonetizationState {
     // RevenueCat is only available on native platforms
     if (!Capacitor.isNativePlatform()) {
       setIsPremium(false); // Web defaults to free for testing/showcase
+      // Stand-in products so the paywall renders its real layout off-device.
+      // The purchase-flow disclosures are what App Review looks at under
+      // guideline 3.1.2(c), and without these the web build only ever shows
+      // the "no products" fallback — leaving that screen untestable.
+      setPackages(WEB_MOCK_PACKAGES);
       setIsReady(true);
       return;
     }

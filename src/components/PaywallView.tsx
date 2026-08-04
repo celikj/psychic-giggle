@@ -5,6 +5,7 @@ import type { MonetizationState } from '../hooks/useMonetization';
 import { LIMITS } from '../lib/monetization';
 import { telemetry } from '../lib/telemetry';
 import { openExternal, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../lib/links';
+import { offerCopy } from '../lib/subscriptionCopy';
 
 interface Props {
   monetization: MonetizationState;
@@ -90,38 +91,54 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
 
           <div className="pt-6 space-y-3">
             {packages.length > 0 ? (
-              packages.map(pkg => (
-                <button
-                  key={pkg.identifier}
-                  onClick={() => handlePurchase(pkg)}
-                  className={`w-full relative overflow-hidden rounded-2xl p-4 text-left active:scale-[0.98] transition-all border ${
-                    pkg.packageType === 'ANNUAL'
-                      ? 'bg-gradient-to-br from-[#FF6B35] to-orange-500 border-transparent shadow-[0_8px_24px_rgba(255,107,53,0.3)]'
-                      : 'bg-[#141417] border-white/10 hover:border-white/20'
-                  }`}
-                >
-                  {pkg.packageType === 'ANNUAL' && (
-                    <div className="absolute top-0 right-0 bg-white/20 px-3 py-1 rounded-bl-xl rounded-tr-xl">
-                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">Best Value</span>
+              packages.map(pkg => {
+                const copy = offerCopy(pkg.product);
+                const isAnnual = pkg.packageType === 'ANNUAL';
+                return (
+                  <button
+                    key={pkg.identifier}
+                    onClick={() => handlePurchase(pkg)}
+                    aria-label={`Subscribe ${copy.planName}: ${copy.terms}`}
+                    className={`w-full relative overflow-hidden rounded-2xl p-4 text-left active:scale-[0.98] transition-all border ${
+                      isAnnual
+                        ? 'bg-gradient-to-br from-[#FF6B35] to-orange-500 border-transparent shadow-[0_8px_24px_rgba(255,107,53,0.3)]'
+                        : 'bg-[#141417] border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-white">{copy.planName}</p>
+                          {/* Inline rather than a corner ribbon: as an overlay it
+                              sat on top of the price, and the billed amount has
+                              to stay the clearest thing on the row. */}
+                          {isAnnual && (
+                            <span className="text-[9px] font-bold text-white uppercase tracking-wider bg-white/20 px-1.5 py-0.5 rounded-md">
+                              Best Value
+                            </span>
+                          )}
+                        </div>
+                        {/* Guideline 3.1.2(c): an offer is never stated without
+                            the amount billed after it, and always in smaller,
+                            dimmer type than the price on the right. */}
+                        {copy.offerNote && (
+                          <p className={`text-[11px] mt-0.5 ${isAnnual ? 'text-white/75' : 'text-white/35'}`}>
+                            {copy.offerNote}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-bold text-xl text-white leading-none">{copy.priceString}</p>
+                        {copy.cadence && (
+                          <p className={`text-[11px] mt-1 ${isAnnual ? 'text-white/80' : 'text-white/45'}`}>
+                            {copy.cadence}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className={`font-semibold ${pkg.packageType === 'ANNUAL' ? 'text-white' : 'text-white'}`}>
-                        {pkg.product.title}
-                      </p>
-                      <p className={`text-xs mt-0.5 ${pkg.packageType === 'ANNUAL' ? 'text-white/80' : 'text-white/40'}`}>
-                        {pkg.product.description}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-bold text-lg ${pkg.packageType === 'ANNUAL' ? 'text-white' : 'text-white'}`}>
-                        {pkg.product.priceString}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))
+                  </button>
+                );
+              })
             ) : monetization.isReady ? (
               <div className="text-center p-4">
                 <p className="text-white/50 text-sm">Packages are not available at this moment. Please check your App Store connection.</p>
@@ -155,11 +172,26 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
               Restore Purchases
             </button>
             {/* Required on subscription screens (App Review Guideline 3.1.2):
-                auto-renewal disclosure + working Privacy Policy and Terms links. */}
-            <p className="text-center text-[10px] text-white/25 leading-relaxed mt-2 px-4">
-              Subscriptions renew automatically until cancelled. Manage or cancel
-              anytime in your App Store account settings.
-            </p>
+                auto-renewal disclosure + working Privacy Policy and Terms links.
+                Spelled out per plan, so the billed amount is stated in full
+                prose as well as on the buttons — 3.1.2(c). */}
+            <div className="mt-2 px-4 space-y-1.5">
+              {packages.length > 0 ? (
+                packages.map(pkg => {
+                  const copy = offerCopy(pkg.product);
+                  return (
+                    <p key={pkg.identifier} className="text-center text-[10px] text-white/30 leading-relaxed">
+                      <span className="font-semibold text-white/40">{copy.planName}:</span> {copy.terms}
+                    </p>
+                  );
+                })
+              ) : (
+                <p className="text-center text-[10px] text-white/25 leading-relaxed">
+                  Subscriptions renew automatically until cancelled. Manage or cancel
+                  anytime in your App Store account settings.
+                </p>
+              )}
+            </div>
             <div className="flex items-center justify-center gap-4 mt-2">
               <button
                 onClick={() => openExternal(PRIVACY_POLICY_URL)}

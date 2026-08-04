@@ -309,7 +309,7 @@ test.describe('settings', () => {
     // Opened deliberately rather than by being blocked, so no limits warning.
     await expect(page.getByText(/Free tier is limited to/)).not.toBeVisible();
 
-    await page.getByRole('button', { name: 'Unlock (Web Mock)' }).click();
+    await page.getByRole('button', { name: /Subscribe Annual/ }).click();
     await expect(page.getByText('Active — unlimited locking tasks and routines')).toBeVisible();
   });
 });
@@ -368,6 +368,32 @@ test.describe('strict mode', () => {
 });
 
 test.describe('paywall', () => {
+  // App Review rejected build 31 under guideline 3.1.2(c) for promoting the
+  // free trial more conspicuously than the billed amount.
+  test('never states an offer without the amount that will be billed', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Upgrade to TaskLock Premium' }).click();
+
+    // The trial line carries the price it converts to, not just "7 days free".
+    await expect(page.getByText('7 days free, then $29.99 per year')).toBeVisible();
+    // The billed amount is the biggest thing on the row.
+    const price = page.getByText('$29.99', { exact: true });
+    await expect(price).toBeVisible();
+    await expect(price).toHaveClass(/text-xl/);
+    const trialNote = page.getByText('7 days free, then $29.99 per year');
+    await expect(trialNote).toHaveClass(/text-\[11px\]/);
+
+    // Full terms, per plan, in prose.
+    await expect(
+      page.getByText(/Free for 7 days, then \$29\.99 per year\..*cancel at least 24 hours/)
+    ).toBeVisible();
+    await expect(page.getByText(/\$4\.99 per month\. Renews automatically until cancelled/)).toBeVisible();
+
+    // A plan with no offer advertises none.
+    await expect(page.getByText(/free.*then \$4\.99/i)).not.toBeVisible();
+  });
+
   test('free tier limits daily and locking tasks', async ({ page }) => {
     await skipOnboarding(page);
     
@@ -391,10 +417,9 @@ test.describe('paywall', () => {
     await expect(page.getByText('TaskLock Premium')).toBeVisible();
     await expect(page.getByText(/Free tier is limited to/)).toBeVisible();
 
-    // "Purchase" via the web-only mock unlock button (no real RevenueCat
-    // packages are available in this suite, so the paywall shows its
-    // no-packages fallback with a web-only mock purchase link).
-    await page.getByRole('button', { name: 'Unlock (Web Mock)' }).click();
+    // "Purchase" a plan — off-device the packages are stand-ins and the
+    // purchase is mocked, so this exercises the real paywall layout.
+    await page.getByRole('button', { name: /Subscribe Annual/ }).click();
 
     // Paywall should close, and now we can add the 2nd daily
     await expect(page.getByText('TaskLock Premium')).not.toBeVisible();
