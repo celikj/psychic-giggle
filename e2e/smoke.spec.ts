@@ -216,7 +216,11 @@ test.describe('task list interactions', () => {
     const yest = new Date();
     yest.setDate(yest.getDate() - 1);
     const label = yest.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    await page.getByRole('button', { name: label }).click();
+    // exact, because getByRole matches the accessible name as a substring by
+    // default: on the 2nd of a month this asked for "Saturday, August 1" and
+    // also matched "Saturday, August 15" — always rendered, always the same
+    // weekday — failing strict mode once a month.
+    await page.getByRole('button', { name: label, exact: true }).click();
     await page.getByRole('button', { name: 'Add Task' }).first().click();
     await page.getByPlaceholder('What needs to be done?').fill('Yesterday chore');
     await page.getByRole('button', { name: 'Add Task' }).last().click();
