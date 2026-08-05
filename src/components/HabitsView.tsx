@@ -7,7 +7,9 @@ import ConfirmDeleteButton from './ConfirmDeleteButton';
 import EditButton from './EditButton';
 import ItemStatsModal from './ItemStatsModal';
 import { hapticTick } from '../lib/haptics';
+import { usePersisted } from '../hooks/usePersisted';
 import { HABIT_TEMPLATES } from '../lib/templates';
+import { useScrollIntoViewOnOpen } from '../hooks/useScrollIntoViewOnOpen';
 
 interface Props {
   store: Store;
@@ -24,7 +26,16 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Editing an item further up the list used to scroll the page to the
+  // bottom, where the form lives.
+  const formRef = useScrollIntoViewOnOpen<HTMLDivElement>(showAdd, editingId);
   const [statsItem, setStatsItem] = useState<Habit | null>(null);
+  // Same as Dailies: the suggestions outlive the empty state, so adding one
+  // doesn't take the rest away with it.
+  const [quickStartHidden, setQuickStartHidden] = usePersisted('tl_quickstart_habits_hidden', false);
+  const remainingTemplates = HABIT_TEMPLATES.filter(
+    t => !habits.some(h => h.title.toLowerCase() === t.title.toLowerCase())
+  );
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [color, setColor] = useState('#FF6B35');
@@ -85,6 +96,104 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
     return max;
   };
 
+  // The editor renders where the item is, not at the end of the list.
+  const renderForm = () => (
+            <div ref={formRef} className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-4 animate-slide-up">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-white">{editingId ? 'Edit Habit' : 'New Habit'}</span>
+                <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-4 h-4 text-white/30" />
+                </button>
+              </div>
+
+              {/* Emoji + title */}
+              <div className="flex gap-2">
+                <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
+                  {emoji}
+                </div>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                  placeholder="Habit name..."
+                  className="flex-1 bg-transparent text-white placeholder-white/25 text-sm font-medium outline-none px-2 bg-white/5 rounded-xl border border-white/10"
+                />
+              </div>
+
+              {/* Emoji picker */}
+              <div>
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Emoji</p>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {PRESET_EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      onClick={() => setEmoji(e)}
+                      className={`w-full aspect-square rounded-xl text-xl flex items-center justify-center transition-all ${
+                        emoji === e ? 'bg-white/15 scale-110' : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color picker */}
+              <div>
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Color</p>
+                <div className="flex gap-2">
+                  {PRESET_COLORS.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setColor(c)}
+                      className={`w-8 h-8 rounded-xl flex-shrink-0 transition-all ${
+                        color === c ? 'scale-125 ring-2 ring-white/60 ring-offset-1 ring-offset-[#141417]' : ''
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Days picker */}
+              <div>
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Target Days</p>
+                <div className="flex gap-1.5">
+                  {DAY_LABELS.map((label, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => toggleDay(idx)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        targetDays.includes(idx) ? 'text-white' : 'bg-white/5 text-white/30'
+                      }`}
+                      style={targetDays.includes(idx) ? { backgroundColor: color } : {}}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={resetForm}
+                  className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!title.trim() || targetDays.length === 0}
+                  className="flex-1 py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
+                  style={{ backgroundColor: color }}
+                >
+                  {editingId ? 'Save Changes' : 'Add Habit'}
+                </button>
+              </div>
+            </div>
+  );
+
   return (
     <div className="flex flex-col pb-6">
       {/* Header */}
@@ -115,34 +224,15 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
                 something that can lock your apps too? Try Dailies instead.
               </p>
             </div>
-            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-2 px-1">
-              Quick start
-            </p>
-            <div className="space-y-2">
-              {HABIT_TEMPLATES.map(t => (
-                <button
-                  key={t.title}
-                  onClick={() => addHabit(t.title, t.emoji, t.color, t.targetDays)}
-                  className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
-                >
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                    style={{ backgroundColor: t.color + '22', border: `1.5px solid ${t.color}44` }}
-                  >
-                    {t.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white">{t.title}</p>
-                    <p className="text-xs text-white/40 mt-0.5">{t.subtitle}</p>
-                  </div>
-                  <Plus className="w-4 h-4 text-white/30 flex-shrink-0" />
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
         {habits.map((habit, i) => {
+          // Editing swaps the card for the editor in place, so the form opens
+          // under the finger that tapped it rather than at the bottom.
+          if (editingId === habit.id) {
+            return <div key={habit.id}>{renderForm()}</div>;
+          }
           const doneToday = habit.completedDates.includes(today);
           const streak = getStreak(habit);
           const longest = getLongestStreak(habit);
@@ -242,103 +332,47 @@ export default function HabitsView({ store, monetization, onShowPaywall }: Props
           );
         })}
 
-        {/* Add habit form */}
-        {showAdd && (
-          <div className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-4 animate-slide-up">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-white">{editingId ? 'Edit Habit' : 'New Habit'}</span>
-              <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
-                <X className="w-4 h-4 text-white/30" />
-              </button>
-            </div>
-
-            {/* Emoji + title */}
-            <div className="flex gap-2">
-              <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
-                {emoji}
-              </div>
-              <input
-                type="text"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                placeholder="Habit name..."
-                className="flex-1 bg-transparent text-white placeholder-white/25 text-sm font-medium outline-none px-2 bg-white/5 rounded-xl border border-white/10"
-              />
-            </div>
-
-            {/* Emoji picker */}
-            <div>
-              <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Emoji</p>
-              <div className="grid grid-cols-6 gap-1.5">
-                {PRESET_EMOJIS.map(e => (
-                  <button
-                    key={e}
-                    onClick={() => setEmoji(e)}
-                    className={`w-full aspect-square rounded-xl text-xl flex items-center justify-center transition-all ${
-                      emoji === e ? 'bg-white/15 scale-110' : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Color picker */}
-            <div>
-              <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Color</p>
-              <div className="flex gap-2">
-                {PRESET_COLORS.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setColor(c)}
-                    className={`w-8 h-8 rounded-xl flex-shrink-0 transition-all ${
-                      color === c ? 'scale-125 ring-2 ring-white/60 ring-offset-1 ring-offset-[#141417]' : ''
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Days picker */}
-            <div>
-              <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Target Days</p>
-              <div className="flex gap-1.5">
-                {DAY_LABELS.map((label, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => toggleDay(idx)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      targetDays.includes(idx) ? 'text-white' : 'bg-white/5 text-white/30'
-                    }`}
-                    style={targetDays.includes(idx) ? { backgroundColor: color } : {}}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-1">
+        {!showAdd && !quickStartHidden && remainingTemplates.length > 0 && (
+          <div className="animate-slide-up">
+            <div className="flex items-center justify-between mb-2 px-1 pt-3">
+              <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider">
+                Quick start
+              </p>
               <button
-                onClick={resetForm}
-                className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold"
+                onClick={() => setQuickStartHidden(true)}
+                aria-label="Hide quick start suggestions"
+                className="text-[10px] font-semibold text-white/25 hover:text-white/50 uppercase tracking-wider py-1 px-1"
               >
-                Cancel
+                Hide
               </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!title.trim() || targetDays.length === 0}
-                className="flex-1 py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
-                style={{ backgroundColor: color }}
-              >
-                {editingId ? 'Save Changes' : 'Add Habit'}
-              </button>
+            </div>
+            <div className="space-y-2">
+              {remainingTemplates.map(t => (
+                <button
+                  key={t.title}
+                  onClick={() => addHabit(t.title, t.emoji, t.color, t.targetDays)}
+                  className="w-full flex items-center gap-3 bg-[#141417] border border-white/[0.07] rounded-2xl p-3.5 text-left active:scale-[0.98] transition-transform"
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                    style={{ backgroundColor: t.color + '22', border: `1.5px solid ${t.color}44` }}
+                  >
+                    {t.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">{t.title}</p>
+                    <p className="text-xs text-white/40 mt-0.5">{t.subtitle}</p>
+                  </div>
+                  <Plus className="w-4 h-4 text-white/30 flex-shrink-0" />
+                </button>
+              ))}
             </div>
           </div>
         )}
+
+        {/* Add habit form */}
+        {/* Add form — the edit form renders inline, up in the list */}
+        {showAdd && !editingId && renderForm()}
       </div>
 
       {/* FAB */}

@@ -36,6 +36,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # App Review's automated scan rejects any binary that links a Screen Time
+      # framework without the Family Controls entitlement — including an
+      # extension that only picked one up through a shared source file. Cheap
+      # to check here, expensive to find out from a rejected submission.
+      - name: Family Controls entitlement check
+        run: npm run check:entitlements
+
       - name: Unit tests
         run: npm run test:unit
 

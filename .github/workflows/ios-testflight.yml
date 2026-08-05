@@ -114,15 +114,40 @@ jobs:
           </dict>
           </plist>
           PLIST
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
-            -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
-            -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}
-          ls -la "$RUNNER_TEMP/export"
+          # Same flake the archive step retries for: export fetches a profile per
+          # bundle id from Apple, and a dropped connection surfaces as
+          # "No profiles for 'com.celikj.tasklock...' were found" right after an
+          # "Internet connection appears to be offline" line — which reads like a
+          # missing capability but isn't. Retry before believing it.
+          for attempt in 1 2 3; do
+            if xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/App.xcarchive" \
+              -exportPath "$RUNNER_TEMP/export" \
+              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+              -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+              -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}; then
+              ls -la "$RUNNER_TEMP/export"
+              exit 0
+            fi
+            echo "Export attempt $attempt failed; retrying in 60s..."
+            # A partial export directory makes the next attempt fail on its own.
+            rm -rf "$RUNNER_TEMP/export"
+            sleep 60
+          done
+          echo "Export failed after 3 attempts." >&2
+          exit 70
+
+      # The export re-signs every bundle with whatever the distribution profile
+      # grants. If Family Controls isn't enabled on an App ID, the entitlement
+      # is silently dropped here and the upload succeeds — App Review is then
+      # the first thing to tell you, days later. Check the actual signed
+      # binaries instead.
+      - name: Verify Family Controls entitlement on the signed .ipa
+        run: |
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+          scripts/verify-ipa-entitlements.sh "$IPA"
 
       - name: Upload to TestFlight
         run: |

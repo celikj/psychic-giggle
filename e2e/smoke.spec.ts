@@ -112,7 +112,7 @@ test.describe('dailies', () => {
     await expect(page.getByText('Apps Unlocked!')).toBeVisible();
   });
 
-  test('a quick-start template adds a preset daily in one tap', async ({ page }) => {
+  test('a quick-start template adds a preset daily, leaving the rest addable', async ({ page }) => {
     await skipOnboarding(page);
     await page.getByRole('button', { name: 'Dailies' }).click();
     await expect(page.getByText('Quick start')).toBeVisible();
@@ -120,8 +120,41 @@ test.describe('dailies', () => {
     await page.getByRole('button', { name: /Brush teeth/ }).click();
     await expect(page.getByText('Brush teeth')).toBeVisible();
     await expect(page.getByText('Locks from 9:00 PM')).toBeVisible();
-    // Once something exists, the empty-state template picker goes away.
+
+    // Adding one used to hide the whole picker, stranding the other
+    // suggestions. The rest stay, and the one just added drops out of them.
+    await expect(page.getByText('Quick start')).toBeVisible();
+    await expect(page.getByText('Every night · 9:00 PM · locking')).not.toBeVisible();
+    await page.getByRole('button', { name: /Walk the dog/ }).click();
+    await expect(page.getByText('Walk the dog')).toBeVisible();
+
+    // Dismissing is the way out, and it sticks across a reload.
+    await page.getByRole('button', { name: 'Hide quick start suggestions' }).click();
     await expect(page.getByText('Quick start')).not.toBeVisible();
+    await page.reload();
+    await expect(page.getByText('Quick start')).not.toBeVisible();
+  });
+
+  test('the editor opens where the item is, not at the bottom of the list', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Dailies' }).click();
+    for (const t of [/Brush teeth/, /Take vitamins/, /Walk the dog/]) {
+      await page.getByRole('button', { name: t }).click();
+    }
+
+    // Edit the first routine. The form used to render after the whole list,
+    // so this dropped the user at the bottom of the page.
+    await page.getByRole('button', { name: 'Edit daily "Brush teeth"' }).first().click();
+
+    const heading = page.getByText('Edit Daily', { exact: true });
+    await expect(heading).toBeVisible();
+    const box = await heading.boundingBox();
+    expect(box).not.toBeNull();
+    // Where the first card was — near the top, well inside the 844pt viewport.
+    expect(box!.y).toBeLessThan(400);
+    // The card it replaced is gone, and the ones below it stay.
+    await expect(page.getByRole('button', { name: 'Check off "Brush teeth" for today' })).toHaveCount(0);
+    await expect(page.getByText('Take vitamins')).toBeVisible();
   });
 
   test('a barcode daily only checks off with the registered code', async ({ page }) => {
@@ -148,13 +181,19 @@ test.describe('dailies', () => {
   });
 });
 
-test('a quick-start template adds a preset habit in one tap', async ({ page }) => {
+test('a quick-start template adds a preset habit, leaving the rest addable', async ({ page }) => {
   await skipOnboarding(page);
   await page.getByRole('button', { name: 'Habits' }).click();
   await expect(page.getByText('Quick start')).toBeVisible();
 
   await page.getByRole('button', { name: /Meditate/ }).click();
   await expect(page.getByText('Meditate')).toBeVisible();
+
+  await expect(page.getByText('Quick start')).toBeVisible();
+  await page.getByRole('button', { name: /Drink water/ }).click();
+  await expect(page.getByText('Drink water')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Hide quick start suggestions' }).click();
   await expect(page.getByText('Quick start')).not.toBeVisible();
 });
 
@@ -199,7 +238,11 @@ test.describe('task list interactions', () => {
     const yest = new Date();
     yest.setDate(yest.getDate() - 1);
     const label = yest.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    await page.getByRole('button', { name: label }).click();
+    // exact, because getByRole matches the accessible name as a substring by
+    // default: on the 2nd of a month this asked for "Saturday, August 1" and
+    // also matched "Saturday, August 15" — always rendered, always the same
+    // weekday — failing strict mode once a month.
+    await page.getByRole('button', { name: label, exact: true }).click();
     await page.getByRole('button', { name: 'Add Task' }).first().click();
     await page.getByPlaceholder('What needs to be done?').fill('Yesterday chore');
     await page.getByRole('button', { name: 'Add Task' }).last().click();
@@ -282,6 +325,19 @@ test.describe('settings', () => {
     // Not running as a native app in this suite, so reminders can't be enabled here.
     await expect(page.getByText('Available in the iPhone app')).toBeVisible();
   });
+
+  test('offers Premium directly, without having to hit a limit first', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+
+    await page.getByRole('button', { name: 'Upgrade to TaskLock Premium' }).click();
+    await expect(page.getByText('TaskLock Premium')).toBeVisible();
+    // Opened deliberately rather than by being blocked, so no limits warning.
+    await expect(page.getByText(/Free tier is limited to/)).not.toBeVisible();
+
+    await page.getByRole('button', { name: /Subscribe Annual/ }).click();
+    await expect(page.getByText('Active — unlimited locking tasks and routines')).toBeVisible();
+  });
 });
 
 test('data survives a reload', async ({ page }) => {
@@ -338,6 +394,32 @@ test.describe('strict mode', () => {
 });
 
 test.describe('paywall', () => {
+  // App Review rejected build 31 under guideline 3.1.2(c) for promoting the
+  // free trial more conspicuously than the billed amount.
+  test('never states an offer without the amount that will be billed', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Upgrade to TaskLock Premium' }).click();
+
+    // The trial line carries the price it converts to, not just "7 days free".
+    await expect(page.getByText('7 days free, then $29.99 per year')).toBeVisible();
+    // The billed amount is the biggest thing on the row.
+    const price = page.getByText('$29.99', { exact: true });
+    await expect(price).toBeVisible();
+    await expect(price).toHaveClass(/text-xl/);
+    const trialNote = page.getByText('7 days free, then $29.99 per year');
+    await expect(trialNote).toHaveClass(/text-\[11px\]/);
+
+    // Full terms, per plan, in prose.
+    await expect(
+      page.getByText(/Free for 7 days, then \$29\.99 per year\..*cancel at least 24 hours/)
+    ).toBeVisible();
+    await expect(page.getByText(/\$4\.99 per month\. Renews automatically until cancelled/)).toBeVisible();
+
+    // A plan with no offer advertises none.
+    await expect(page.getByText(/free.*then \$4\.99/i)).not.toBeVisible();
+  });
+
   test('free tier limits daily and locking tasks', async ({ page }) => {
     await skipOnboarding(page);
     
@@ -361,10 +443,9 @@ test.describe('paywall', () => {
     await expect(page.getByText('TaskLock Premium')).toBeVisible();
     await expect(page.getByText(/Free tier is limited to/)).toBeVisible();
 
-    // "Purchase" via the web-only mock unlock button (no real RevenueCat
-    // packages are available in this suite, so the paywall shows its
-    // no-packages fallback with a web-only mock purchase link).
-    await page.getByRole('button', { name: 'Unlock (Web Mock)' }).click();
+    // "Purchase" a plan — off-device the packages are stand-ins and the
+    // purchase is mocked, so this exercises the real paywall layout.
+    await page.getByRole('button', { name: /Subscribe Annual/ }).click();
 
     // Paywall should close, and now we can add the 2nd daily
     await expect(page.getByText('TaskLock Premium')).not.toBeVisible();

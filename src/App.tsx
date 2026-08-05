@@ -28,7 +28,7 @@ export default function App() {
   const notif = useNotifications();
   const monetization = useMonetization();
 
-  const [paywallReason, setPaywallReason] = useState<'daily' | 'habit' | 'locking' | null>(null);
+  const [paywallReason, setPaywallReason] = useState<'daily' | 'habit' | 'locking' | 'settings' | null>(null);
 
   const [onboarded, setOnboarded, onboardedReady] = usePersisted('tl_onboarded', false);
   const [showIntro, setShowIntro] = useState(false);
@@ -296,7 +296,7 @@ export default function App() {
         {activeTab === 'dailies'  && <DailiesView store={store} monetization={monetization} notif={notif} onShowPaywall={() => setPaywallReason('daily')} />}
         {activeTab === 'habits'   && <HabitsView store={store} monetization={monetization} onShowPaywall={() => setPaywallReason('habit')} />}
         {activeTab === 'blocker'  && <BlockerView store={store} st={st} />}
-        {activeTab === 'settings' && <SettingsView store={store} notif={notif} monetization={monetization} onShowIntro={() => setShowIntro(true)} />}
+        {activeTab === 'settings' && <SettingsView store={store} notif={notif} monetization={monetization} onShowIntro={() => setShowIntro(true)} onShowPaywall={() => setPaywallReason('settings')} />}
       </div>
       <BottomNav
         activeTab={activeTab}

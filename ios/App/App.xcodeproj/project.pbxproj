@@ -21,6 +21,8 @@
 		BB0000000000000000000011 /* ShieldConfig.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000008 /* ShieldConfig.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CC0000000000000000000011 /* TaskLockShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000005 /* TaskLockShared.swift */; };
 		CC0000000000000000000012 /* TaskLockShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000005 /* TaskLockShared.swift */; };
+		EE0000000000000000000011 /* TaskLockShield.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000005 /* TaskLockShield.swift */; };
+		EE0000000000000000000012 /* TaskLockShield.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000005 /* TaskLockShield.swift */; };
 		CC0000000000000000000013 /* DeviceActivityMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000002 /* DeviceActivityMonitorExtension.swift */; };
 		CC0000000000000000000014 /* TaskMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000001 /* TaskMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DD0000000000000000000011 /* TaskLockWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000002 /* TaskLockWidget.swift */; };
@@ -67,6 +69,7 @@
 		CC0000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		CC0000000000000000000004 /* TaskMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskMonitor.entitlements; sourceTree = "<group>"; };
 		CC0000000000000000000005 /* TaskLockShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskLockShared.swift; sourceTree = "<group>"; };
+		EE0000000000000000000005 /* TaskLockShield.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskLockShield.swift; sourceTree = "<group>"; };
 		DD0000000000000000000001 /* TaskLockWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TaskLockWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD0000000000000000000002 /* TaskLockWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskLockWidget.swift; sourceTree = "<group>"; };
 		DD0000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -172,6 +175,7 @@
 			isa = PBXGroup;
 			children = (
 				CC0000000000000000000005 /* TaskLockShared.swift */,
+				EE0000000000000000000005 /* TaskLockShield.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -338,6 +342,7 @@
 				AA00000000000000000A0002 /* ScreenTimePlugin.swift in Sources */,
 				AA00000000000000000A0005 /* MainViewController.swift in Sources */,
 				CC0000000000000000000011 /* TaskLockShared.swift in Sources */,
+				EE0000000000000000000011 /* TaskLockShield.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -355,6 +360,7 @@
 			files = (
 				CC0000000000000000000013 /* DeviceActivityMonitorExtension.swift in Sources */,
 				CC0000000000000000000012 /* TaskLockShared.swift in Sources */,
+				EE0000000000000000000012 /* TaskLockShield.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

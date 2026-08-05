@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud } from 'lucide-react';
+import { PlayCircle, Bell, Download, Upload, Loader2, ShieldCheck, Flame, CheckCircle2, CalendarDays, Cloud, Sparkles, ChevronRight } from 'lucide-react';
 import type { NotificationsController } from '../hooks/useNotifications';
 import type { Store } from '../hooks/useStore';
 import type { MonetizationState } from '../hooks/useMonetization';
 import { shareBackup, pickAndRestoreBackup } from '../lib/backup';
-import { openExternal, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../lib/links';
+import { openExternal, PRIVACY_POLICY_URL, TERMS_OF_USE_URL, MANAGE_SUBSCRIPTION_URL } from '../lib/links';
 import { t } from '../lib/i18n';
 import pkgJson from '../../package.json';
 
@@ -13,6 +13,7 @@ interface Props {
   notif: NotificationsController;
   monetization: MonetizationState;
   onShowIntro: () => void;
+  onShowPaywall: () => void;
 }
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -141,7 +142,7 @@ function ToggleRow({
   );
 }
 
-export default function SettingsView({ store, notif, monetization, onShowIntro }: Props) {
+export default function SettingsView({ store, notif, monetization, onShowIntro, onShowPaywall }: Props) {
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -186,6 +187,45 @@ export default function SettingsView({ store, notif, monetization, onShowIntro }
       </div>
 
       <div className="px-4 space-y-2">
+        {/* Premium, reachable without first hitting a limit. */}
+        <SectionLabel>Subscription</SectionLabel>
+        {monetization.tier === 'premium' ? (
+          <div className="rounded-2xl border border-[#FF6B35]/25 bg-[#FF6B35]/[0.06] p-4">
+            <div className="flex items-center gap-3">
+              <RowIcon><Sparkles className="w-5 h-5 text-[#FF6B35]" /></RowIcon>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">TaskLock Premium</p>
+                <p className="text-xs text-white/40 mt-0.5">Active — unlimited locking tasks and routines</p>
+              </div>
+            </div>
+            <button
+              onClick={() => openExternal(MANAGE_SUBSCRIPTION_URL)}
+              className="mt-3 w-full text-center text-xs font-semibold text-white/40 hover:text-white/70 py-2 rounded-xl border border-white/10"
+            >
+              Manage subscription
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onShowPaywall}
+            aria-label="Upgrade to TaskLock Premium"
+            className="w-full rounded-2xl p-4 text-left active:scale-[0.98] transition-transform bg-gradient-to-br from-[#FF6B35] to-orange-500 shadow-[0_8px_24px_rgba(255,107,53,0.25)]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white">Upgrade to Premium</p>
+                <p className="text-xs text-white/80 mt-0.5">
+                  Unlimited locking to-dos and dailies, plus 3 streak freezes a month
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-white/70 flex-shrink-0" />
+            </div>
+          </button>
+        )}
+
         <SectionLabel>This Week</SectionLabel>
         <WeeklyStatsCard store={store} />
 
