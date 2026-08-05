@@ -11,6 +11,7 @@ import EditButton from './EditButton';
 import SwipeableRow from './SwipeableRow';
 import { hapticTick } from '../lib/haptics';
 import { t } from '../lib/i18n';
+import { useScrollIntoViewOnOpen } from '../hooks/useScrollIntoViewOnOpen';
 
 interface Props {
   store: Store;
@@ -36,6 +37,9 @@ export default function TasksView({ store, monetization, st, onShowPaywall, onOp
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Editing an item further up the list used to scroll the page to the
+  // bottom, where the form lives.
+  const formRef = useScrollIntoViewOnOpen<HTMLDivElement>(showAdd, editingId);
   const [newTitle, setNewTitle] = useState('');
   const [newPriority, setNewPriority] = useState<Priority>('medium');
   const [newLocking, setNewLocking] = useState(false);
@@ -172,6 +176,85 @@ export default function TasksView({ store, monetization, st, onShowPaywall, onOp
     && (st.status.authorization !== 'approved' || st.status.selectionCount === 0);
   const showSetupCard = setupIncomplete && !setupDismissed;
 
+  // The editor renders where the item is, not at the end of the list.
+  const renderForm = () => (
+            <div ref={formRef} className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-3 animate-slide-up">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/40 uppercase tracking-wider">
+                  {editingId ? 'Edit Task' : 'New Task'}
+                </span>
+                <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-4 h-4 text-white/30" />
+                </button>
+              </div>
+
+              <input
+                ref={inputRef}
+                type="text"
+                value={newTitle}
+                onChange={e => setNewTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') resetForm(); }}
+                placeholder="What needs to be done?"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/25 text-sm font-medium outline-none"
+              />
+
+              {/* Priority */}
+              <div className="flex gap-2">
+                {(['low', 'medium', 'high'] as Priority[]).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setNewPriority(p)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-semibold capitalize transition-all duration-200 ${
+                      newPriority === p ? 'text-white scale-105' : 'bg-white/5 text-white/35'
+                    }`}
+                    style={newPriority === p ? { backgroundColor: PRIORITY_COLOR[p] } : {}}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              {/* Locking toggle */}
+              <button
+                onClick={() => {
+                  // When editing an existing locking task and strict is active, prevent un-marking isLocking
+                  if (editingId && newLocking && store.strictState.isActive) {
+                    const existingTask = store.tasks.find(t => t.id === editingId);
+                    if (existingTask?.isLocking && !existingTask.completed) {
+                      window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
+                      return;
+                    }
+                  }
+                  setNewLocking(v => !v);
+                }}
+                className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
+                  newLocking
+                    ? 'bg-red-500/15 border border-red-500/30 text-red-400'
+                    : 'bg-white/5 border border-white/8 text-white/40'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                {newLocking ? 'Locking task — blocks apps until done' : 'Make this a locking task'}
+              </button>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={resetForm}
+                  className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!newTitle.trim()}
+                  className="flex-1 py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
+                >
+                  {editingId ? 'Save Changes' : 'Add Task'}
+                </button>
+              </div>
+            </div>
+  );
+
   return (
     <div className="flex flex-col pb-6">
       {/* Header */}
@@ -307,7 +390,11 @@ export default function TasksView({ store, monetization, st, onShowPaywall, onOp
           </div>
         )}
 
-        {sorted.map((task, i) => (
+        {sorted.map((task, i) => editingId === task.id ? (
+          // Editing swaps the row for the editor in place, so the form opens
+          // under the finger that tapped it rather than at the bottom.
+          <div key={task.id}>{renderForm()}</div>
+        ) : (
           <div key={task.id} style={dragStyle(i)}>
             <SwipeableRow
               disabled={!!drag}
@@ -387,83 +474,8 @@ export default function TasksView({ store, monetization, st, onShowPaywall, onOp
         ))}
 
         {/* Add / edit task inline */}
-        {showAdd && (
-          <div className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-3 animate-slide-up">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-white/40 uppercase tracking-wider">
-                {editingId ? 'Edit Task' : 'New Task'}
-              </span>
-              <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
-                <X className="w-4 h-4 text-white/30" />
-              </button>
-            </div>
-
-            <input
-              ref={inputRef}
-              type="text"
-              value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') resetForm(); }}
-              placeholder="What needs to be done?"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/25 text-sm font-medium outline-none"
-            />
-
-            {/* Priority */}
-            <div className="flex gap-2">
-              {(['low', 'medium', 'high'] as Priority[]).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setNewPriority(p)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-semibold capitalize transition-all duration-200 ${
-                    newPriority === p ? 'text-white scale-105' : 'bg-white/5 text-white/35'
-                  }`}
-                  style={newPriority === p ? { backgroundColor: PRIORITY_COLOR[p] } : {}}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-
-            {/* Locking toggle */}
-            <button
-              onClick={() => {
-                // When editing an existing locking task and strict is active, prevent un-marking isLocking
-                if (editingId && newLocking && store.strictState.isActive) {
-                  const existingTask = store.tasks.find(t => t.id === editingId);
-                  if (existingTask?.isLocking && !existingTask.completed) {
-                    window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
-                    return;
-                  }
-                }
-                setNewLocking(v => !v);
-              }}
-              className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                newLocking
-                  ? 'bg-red-500/15 border border-red-500/30 text-red-400'
-                  : 'bg-white/5 border border-white/8 text-white/40'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5" />
-              {newLocking ? 'Locking task — blocks apps until done' : 'Make this a locking task'}
-            </button>
-
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={resetForm}
-                className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!newTitle.trim()}
-                className="flex-1 py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
-              >
-                {editingId ? 'Save Changes' : 'Add Task'}
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Add form — the edit form renders inline, up in the list */}
+        {showAdd && !editingId && renderForm()}
       </div>
 
       {/* FAB */}

@@ -135,6 +135,28 @@ test.describe('dailies', () => {
     await expect(page.getByText('Quick start')).not.toBeVisible();
   });
 
+  test('the editor opens where the item is, not at the bottom of the list', async ({ page }) => {
+    await skipOnboarding(page);
+    await page.getByRole('button', { name: 'Dailies' }).click();
+    for (const t of [/Brush teeth/, /Take vitamins/, /Walk the dog/]) {
+      await page.getByRole('button', { name: t }).click();
+    }
+
+    // Edit the first routine. The form used to render after the whole list,
+    // so this dropped the user at the bottom of the page.
+    await page.getByRole('button', { name: 'Edit daily "Brush teeth"' }).first().click();
+
+    const heading = page.getByText('Edit Daily', { exact: true });
+    await expect(heading).toBeVisible();
+    const box = await heading.boundingBox();
+    expect(box).not.toBeNull();
+    // Where the first card was — near the top, well inside the 844pt viewport.
+    expect(box!.y).toBeLessThan(400);
+    // The card it replaced is gone, and the ones below it stay.
+    await expect(page.getByRole('button', { name: 'Check off "Brush teeth" for today' })).toHaveCount(0);
+    await expect(page.getByText('Take vitamins')).toBeVisible();
+  });
+
   test('a barcode daily only checks off with the registered code', async ({ page }) => {
     await skipOnboarding(page);
     await page.getByRole('button', { name: 'Dailies' }).click();

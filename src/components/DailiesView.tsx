@@ -13,6 +13,7 @@ import NotificationPrompt from './NotificationPrompt';
 import { hapticTick } from '../lib/haptics';
 import { usePersisted } from '../hooks/usePersisted';
 import { DAILY_TEMPLATES } from '../lib/templates';
+import { useScrollIntoViewOnOpen } from '../hooks/useScrollIntoViewOnOpen';
 
 interface Props {
   store: Store;
@@ -36,6 +37,9 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Editing an item further up the list used to scroll the page to the
+  // bottom, where the form lives.
+  const formRef = useScrollIntoViewOnOpen<HTMLDivElement>(showAdd, editingId);
   const [statsItem, setStatsItem] = useState<Daily | null>(null);
 
   // Ask for notification permission at the one moment it's obviously useful:
@@ -142,6 +146,11 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
   };
 
   const renderCard = (daily: Daily, i: number, due: boolean) => {
+    // Editing swaps the card for the editor in place, so the form opens under
+    // the finger that tapped it rather than at the bottom of the list.
+    if (editingId === daily.id) {
+      return <div key={daily.id}>{renderForm()}</div>;
+    }
     const done = daily.completedDates.includes(today);
     const streak = getDailyStreak(daily);
     return (
@@ -261,6 +270,153 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
     );
   };
 
+  // The editor renders where the item is, not at the end of the list.
+  const renderForm = () => (
+            <div ref={formRef} className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-4 animate-slide-up">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-white">{editingId ? 'Edit Daily' : 'New Daily'}</span>
+                <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-4 h-4 text-white/30" />
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
+                  {emoji}
+                </div>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                  placeholder="Daily routine name..."
+                  className="flex-1 text-white placeholder-white/25 text-sm font-medium outline-none px-2 bg-white/5 rounded-xl border border-white/10"
+                />
+              </div>
+
+              <div>
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Emoji</p>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {PRESET_EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      onClick={() => setEmoji(e)}
+                      className={`w-full aspect-square rounded-xl text-xl flex items-center justify-center transition-all ${
+                        emoji === e ? 'bg-white/15 scale-110' : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Repeat On</p>
+                <div className="flex gap-1.5">
+                  {DAY_LABELS.map((label, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => toggleDay(idx)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        targetDays.includes(idx) ? 'bg-[#FF6B35] text-white' : 'bg-white/5 text-white/30'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Time */}
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <p className="text-sm font-medium text-white">At a set time</p>
+                  <p className="text-xs text-white/40">
+                    {useTime ? 'Due (and locks) from this time' : 'Due any time of day'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  {useTime && (
+                    <input
+                      type="time"
+                      value={time}
+                      onChange={e => setTime(e.target.value)}
+                      className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-sm text-white outline-none"
+                      style={{ colorScheme: 'dark' }}
+                    />
+                  )}
+                  <button
+                    onClick={() => setUseTime(v => !v)}
+                    aria-label="Toggle set time"
+                    className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${useTime ? 'bg-[#FF6B35]' : 'bg-white/15'}`}
+                  >
+                    <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${useTime ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Locking */}
+              <button
+                onClick={() => {
+                  // When editing an existing locking daily and strict is active, prevent un-marking isLocking
+                  if (editingId && isLocking && store.strictState.isActive) {
+                    const existingDaily = store.dailies.find(d => d.id === editingId);
+                    if (existingDaily?.isLocking && !existingDaily.completedDates.includes(today)) {
+                      window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
+                      return;
+                    }
+                  }
+                  setIsLocking(v => !v);
+                }}
+                className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
+                  isLocking
+                    ? 'bg-red-500/15 border border-red-500/30 text-red-400'
+                    : 'bg-white/5 border border-white/8 text-white/40'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+                {isLocking
+                  ? useTime
+                    ? `Locking — apps block from ${formatTime(time)} until done`
+                    : 'Locking — apps block all day until done'
+                  : 'Make this a locking daily'}
+              </button>
+
+              {/* Barcode */}
+              {barcode ? (
+                <div className="w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-300">
+                  <ScanBarcode className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="flex-1 truncate">Barcode registered · …{barcode.slice(-6)}</span>
+                  <button onClick={() => setBarcode(null)} aria-label="Remove barcode" className="p-1 rounded-lg hover:bg-white/10">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setScanTarget('capture')}
+                  className="w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold bg-white/5 border border-white/8 text-white/40 transition-all"
+                >
+                  <ScanBarcode className="w-3.5 h-3.5 flex-shrink-0" />
+                  Require a barcode scan to check off (optional)
+                </button>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={resetForm} className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!title.trim() || targetDays.length === 0}
+                  className="flex-1 py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
+                >
+                  {editingId ? 'Save Changes' : 'Add Daily'}
+                </button>
+              </div>
+            </div>
+  );
+
   return (
     <div className="flex flex-col pb-6">
       {/* Verify / capture scanner */}
@@ -378,151 +534,8 @@ export default function DailiesView({ store, monetization, notif, onShowPaywall 
         )}
 
         {/* Add form */}
-        {showAdd && (
-          <div className="bg-[#141417] rounded-2xl p-4 border border-[#FF6B35]/30 space-y-4 animate-slide-up">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-white">{editingId ? 'Edit Daily' : 'New Daily'}</span>
-              <button onClick={resetForm} aria-label="Cancel" className="p-1 rounded-lg hover:bg-white/10">
-                <X className="w-4 h-4 text-white/30" />
-              </button>
-            </div>
-
-            <div className="flex gap-2">
-              <div className="w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
-                {emoji}
-              </div>
-              <input
-                type="text"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                placeholder="Daily routine name..."
-                className="flex-1 text-white placeholder-white/25 text-sm font-medium outline-none px-2 bg-white/5 rounded-xl border border-white/10"
-              />
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Emoji</p>
-              <div className="grid grid-cols-6 gap-1.5">
-                {PRESET_EMOJIS.map(e => (
-                  <button
-                    key={e}
-                    onClick={() => setEmoji(e)}
-                    className={`w-full aspect-square rounded-xl text-xl flex items-center justify-center transition-all ${
-                      emoji === e ? 'bg-white/15 scale-110' : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Repeat On</p>
-              <div className="flex gap-1.5">
-                {DAY_LABELS.map((label, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => toggleDay(idx)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      targetDays.includes(idx) ? 'bg-[#FF6B35] text-white' : 'bg-white/5 text-white/30'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Time */}
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <p className="text-sm font-medium text-white">At a set time</p>
-                <p className="text-xs text-white/40">
-                  {useTime ? 'Due (and locks) from this time' : 'Due any time of day'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2.5">
-                {useTime && (
-                  <input
-                    type="time"
-                    value={time}
-                    onChange={e => setTime(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-sm text-white outline-none"
-                    style={{ colorScheme: 'dark' }}
-                  />
-                )}
-                <button
-                  onClick={() => setUseTime(v => !v)}
-                  aria-label="Toggle set time"
-                  className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${useTime ? 'bg-[#FF6B35]' : 'bg-white/15'}`}
-                >
-                  <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${useTime ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
-            </div>
-
-            {/* Locking */}
-            <button
-              onClick={() => {
-                // When editing an existing locking daily and strict is active, prevent un-marking isLocking
-                if (editingId && isLocking && store.strictState.isActive) {
-                  const existingDaily = store.dailies.find(d => d.id === editingId);
-                  if (existingDaily?.isLocking && !existingDaily.completedDates.includes(today)) {
-                    window.alert('Strict Mode is active \u2014 you can\'t remove the locking flag until your tasks are done.');
-                    return;
-                  }
-                }
-                setIsLocking(v => !v);
-              }}
-              className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                isLocking
-                  ? 'bg-red-500/15 border border-red-500/30 text-red-400'
-                  : 'bg-white/5 border border-white/8 text-white/40'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5 flex-shrink-0" />
-              {isLocking
-                ? useTime
-                  ? `Locking — apps block from ${formatTime(time)} until done`
-                  : 'Locking — apps block all day until done'
-                : 'Make this a locking daily'}
-            </button>
-
-            {/* Barcode */}
-            {barcode ? (
-              <div className="w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-300">
-                <ScanBarcode className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="flex-1 truncate">Barcode registered · …{barcode.slice(-6)}</span>
-                <button onClick={() => setBarcode(null)} aria-label="Remove barcode" className="p-1 rounded-lg hover:bg-white/10">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setScanTarget('capture')}
-                className="w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold bg-white/5 border border-white/8 text-white/40 transition-all"
-              >
-                <ScanBarcode className="w-3.5 h-3.5 flex-shrink-0" />
-                Require a barcode scan to check off (optional)
-              </button>
-            )}
-
-            <div className="flex gap-2 pt-1">
-              <button onClick={resetForm} className="flex-1 py-3 rounded-xl bg-white/5 text-white/50 text-sm font-semibold">
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!title.trim() || targetDays.length === 0}
-                className="flex-1 py-3 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold disabled:opacity-30 active:scale-95 transition-transform"
-              >
-                {editingId ? 'Save Changes' : 'Add Daily'}
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Add form — the edit form renders inline, up in the list */}
+        {showAdd && !editingId && renderForm()}
       </div>
 
       {/* FAB */}
