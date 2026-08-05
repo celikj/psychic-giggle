@@ -59,6 +59,14 @@ export interface MonetizationState {
   packages: PurchasesPackage[];
   /** True once a getOfferings() call has come back with zero packages — lets the paywall offer a retry instead of a dead end. */
   offeringsFailed: boolean;
+  /**
+   * Why the products couldn't be loaded, in the store's own words. An empty
+   * paywall is unshippable — App Review sees "no products" as a broken
+   * purchase flow — and the causes (no current offering, products not
+   * fetchable from App Store Connect, a bad SDK key) are indistinguishable
+   * from the device without this.
+   */
+  offeringsError: string | null;
   offeringsLoading: boolean;
   fetchOfferings: () => Promise<void>;
   purchase: (pkg: PurchasesPackage) => Promise<boolean>;
@@ -70,26 +78,47 @@ export function useMonetization(): MonetizationState {
   const [isReady, setIsReady] = useState(false);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [offeringsFailed, setOfferingsFailed] = useState(false);
+  const [offeringsError, setOfferingsError] = useState<string | null>(null);
   const [offeringsLoading, setOfferingsLoading] = useState(false);
   const configuredRef = useRef(false);
 
   const fetchOfferings = useCallback(async () => {
     if (!configuredRef.current) return;
     setOfferingsLoading(true);
-    try {
-      const offerings = await Purchases.getOfferings();
-      if (offerings.current && offerings.current.availablePackages.length !== 0) {
-        setPackages(offerings.current.availablePackages);
-        setOfferingsFailed(false);
-      } else {
-        setOfferingsFailed(true);
+
+    // StoreKit product loading is racy right after launch — a cold start can
+    // hand back an empty offering that a moment later resolves fine. One shot
+    // turned that into a permanently empty paywall.
+    let reason = '';
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const { current } = await Purchases.getOfferings();
+        const available = current?.availablePackages ?? [];
+        if (available.length > 0) {
+          setPackages(available);
+          setOfferingsFailed(false);
+          setOfferingsError(null);
+          setOfferingsLoading(false);
+          return;
+        }
+        // Distinguishing these two is the difference between "fix the
+        // dashboard" and "fix App Store Connect".
+        reason = current
+          ? `Offering "${current.identifier}" is configured but returned no purchasable products — check the products are attached to it and fetchable from App Store Connect.`
+          : 'RevenueCat has no current offering configured for this app.';
+      } catch (e: any) {
+        reason = e?.message ? String(e.message) : String(e);
       }
-    } catch (e) {
-      console.error('Error fetching RevenueCat offerings:', e);
-      setOfferingsFailed(true);
-    } finally {
-      setOfferingsLoading(false);
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 1500));
+      }
     }
+
+    console.error('RevenueCat offerings unavailable:', reason);
+    telemetry.track('offeringsUnavailable', { reason: reason.slice(0, 120) });
+    setOfferingsFailed(true);
+    setOfferingsError(reason);
+    setOfferingsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -192,6 +221,7 @@ export function useMonetization(): MonetizationState {
     isReady,
     packages,
     offeringsFailed,
+    offeringsError,
     offeringsLoading,
     fetchOfferings,
     purchase,

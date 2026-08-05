@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function PaywallView({ monetization, onClose, reason }: Props) {
-  const { packages, purchase, restore, offeringsFailed, offeringsLoading, fetchOfferings } = monetization;
+  const { packages, purchase, restore, offeringsFailed, offeringsError, offeringsLoading, fetchOfferings } = monetization;
 
   // Paired with the 'purchase' signal, this is what turns into a conversion
   // rate — the metric that actually matters for a paywall.
@@ -142,6 +142,11 @@ export default function PaywallView({ monetization, onClose, reason }: Props) {
             ) : monetization.isReady ? (
               <div className="text-center p-4">
                 <p className="text-white/50 text-sm">Packages are not available at this moment. Please check your App Store connection.</p>
+                {/* The store's own words. Without this an empty paywall looks
+                    identical whatever the cause, on a device with no console. */}
+                {offeringsError && (
+                  <p className="text-white/25 text-[10px] leading-relaxed mt-2 px-2">{offeringsError}</p>
+                )}
                 {Capacitor.isNativePlatform() && offeringsFailed && (
                   <button
                     onClick={() => fetchOfferings()}
