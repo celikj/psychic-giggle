@@ -95,11 +95,27 @@ jobs:
           echo "BUNDLE_ID=$BUNDLE_ID" >> "$GITHUB_ENV"
           echo "Signing $ORIGINAL as $BUNDLE_ID"
 
-          if [ "$ORIGINAL" != "$BUNDLE_ID" ]; then
-            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
-            rm -f ../unsigned.ipa
-            zip -qry ../unsigned.ipa Payload
+          # App extensions carry their own bundle ids, and Apple requires each
+          # to stay prefixed by its parent's. Renaming only the app leaves the
+          # extensions on the original developer's ids, which cannot be
+          # registered here — export then fails asking for profiles for
+          # com.kdt.livecontainer.LaunchAppExtension and friends.
+          IDS="$BUNDLE_ID"
+          if [ -d "$APP/PlugIns" ]; then
+            for ext in "$APP"/PlugIns/*.appex; do
+              [ -d "$ext" ] || continue
+              ext_old="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$ext/Info.plist")"
+              ext_new="${BUNDLE_ID}${ext_old#"$ORIGINAL"}"
+              /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $ext_new" "$ext/Info.plist"
+              echo "  extension $ext_old -> $ext_new"
+              IDS="$IDS $ext_new"
+            done
           fi
+
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
+          rm -f ../unsigned.ipa
+          zip -qry ../unsigned.ipa Payload
+          echo "ALL_BUNDLE_IDS=$IDS" >> "$GITHUB_ENV"
 
       - name: Write the App Store Connect API key
         env:
@@ -123,7 +139,9 @@ jobs:
           # xcodebuild wants the raw .p8 on disk, in the location the
           # TestFlight workflow also uses.
           mkdir -p ~/private_keys
-          printf '%s' "$PRIVATE_KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
+          # echo, not printf '%s': the trailing newline matters. Without it
+          # exportArchive fails with a bare "Authentication failed".
+          echo "$PRIVATE_KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
           chmod 600 ~/private_keys/AuthKey_${KEY_ID}.p8
 
       - name: Register the device
@@ -146,8 +164,10 @@ jobs:
           set -euo pipefail
           # -allowProvisioningUpdates can register bundle ids itself, but doing
           # it up front removes one thing the export can fail on. Idempotent.
-          ASC_KEY_JSON="$RUNNER_TEMP/asc_key.json" BUNDLE_ID="$BUNDLE_ID" \
-            ruby scripts/asc-register-bundle-id.rb
+          for id in $ALL_BUNDLE_IDS; do
+            ASC_KEY_JSON="$RUNNER_TEMP/asc_key.json" BUNDLE_ID="$id" \
+              ruby scripts/asc-register-bundle-id.rb
+          done
 
       - name: Build an archive around the app
         run: |
