@@ -40,62 +40,47 @@ Controls, DeviceActivity, ManagedSettings, WidgetKit) · RevenueCat · Aptabase
 
 Pending review — link coming soon.
 
-## Rotating the signing secrets
+## Signing an IPA for a device
 
-The **Sign IPA** workflow (`.github/workflows/sign-ipa.yml`) re-signs an `.ipa`
-with a certificate held in repo secrets, so a device can be provisioned without
-a Mac. It reads three secrets, none of which the TestFlight workflow uses —
-that one signs through the App Store Connect API key instead:
+The **Sign IPA** workflow (`.github/workflows/sign-ipa.yml`) re-signs any
+`.ipa` and publishes it for over-the-air install, so a device can be
+provisioned with no Mac, Xcode or iTunes involved.
 
-| Secret | Contents |
+It adds no secrets. The App Store Connect API key already used for TestFlight
+(`APPSTORE_KEY_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_PRIVATE_KEY`,
+`APPLE_TEAM_ID`) is enough: fastlane generates a keypair on the runner, has
+Apple issue a development certificate against it, registers the App ID, and
+builds a provisioning profile. The certificate never leaves the job, and the
+keychain holding it is deleted in an `always()` step.
+
+Run it from **Actions → Sign IPA → Run workflow**:
+
+| Input | Meaning |
 | --- | --- |
-| `IOS_SIGNING_P12_BASE64` | base64 of a `.p12` holding the certificate **and its private key** |
-| `IOS_SIGNING_P12_PASSWORD` | the password the `.p12` was exported with |
-| `IOS_PROVISIONING_PROFILE_BASE64` | base64 of the matching `.mobileprovision` |
+| `ipa_url` | Direct download URL of the IPA. Blank uses `app.ipa` from the repo root. |
+| `bundle_id` | What to sign under. Blank derives `com.<owner>.<app name>`. |
+| `udid` | A device UDID to register first. Blank uses whatever devices the account already has. |
 
-Certificates last a year and profiles expire with them, so this needs redoing
-annually. No Mac required at any point.
+The bundle id is rewritten before signing because bundle ids are globally
+unique across all Apple developers — a third-party app's own id belongs to
+whoever built it and can't be registered here.
 
-**1. Make a key and a certificate request.** Any machine with `openssl` (Git
-for Windows ships one; `a-Shell` on iOS also works):
+**A device UDID is the one thing that can't be automated.** No API can
+discover a phone's UDID; it has to be read off the device once and passed in
+via `udid`. After that the device stays registered and the input can be left
+blank. A profile with no devices installs nowhere, so the workflow fails
+early and says so rather than letting the install fail silently on the phone.
 
-```sh
-openssl genrsa -out ios.key 2048
-openssl req -new -key ios.key -out ios.csr -subj "/emailAddress=you@example.com/CN=Your Name/C=TR"
-```
+The job summary prints an `itms-services://` link — open it in Safari on a
+registered device, then trust the certificate under Settings → General → VPN
+& Device Management.
 
-**2. Turn it into a certificate.** At
-[developer.apple.com](https://developer.apple.com/account/resources/certificates/list)
-→ **+** → *Apple Development* → upload `ios.csr` → download `ios.cer`. Then:
+The IPA and its manifest are published as **public** release assets, because
+iOS fetches both itself with no credentials. Delete the release once the app
+is installed.
 
-```sh
-openssl x509 -in ios.cer -inform DER -out ios.pem -outform PEM
-openssl pkcs12 -export -inkey ios.key -in ios.pem -out ios.p12
-```
-
-The export password you choose here is `IOS_SIGNING_P12_PASSWORD`.
-
-**3. Make a provisioning profile.** Still in the portal: register the target
-device's UDID under **Devices**, create an App ID (a wildcard `*` one covers
-any app), then create an *iOS App Development* profile tying the certificate,
-App ID and devices together, and download it. **Only devices listed in this
-profile can install the result** — that is the usual reason an OTA install
-silently fails.
-
-**4. Load the secrets.**
-
-```sh
-base64 -w0 ios.p12                  # → IOS_SIGNING_P12_BASE64
-base64 -w0 profile.mobileprovision  # → IOS_PROVISIONING_PROFILE_BASE64
-```
-
-macOS and Git Bash have no `-w0`; use `base64 -i ios.p12` there. Paste each
-into **Settings → Secrets and variables → Actions**. Delete `ios.key` and
-`ios.p12` afterwards — anyone holding them can sign as you.
-
-**5. Enable Pages once.** Settings → Pages → *Deploy from a branch* →
-`gh-pages`. The workflow writes `manifest.plist` there; without Pages the
-`itms-services://` link in the job summary has nothing to fetch.
-
-Revoking a leaked certificate is done in the same portal page as step 2;
-anything signed with it stops launching once revoked.
+Apple caps how many development certificates can exist at once, and each run
+issues a new one. If a run fails on that limit, revoke the unused ones in
+[Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list) —
+that is also where a leaked certificate is revoked, and anything signed with
+it stops launching immediately.

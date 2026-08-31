@@ -1,17 +1,20 @@
 name: Sign IPA
 
-# Re-signs an .ipa with the Apple developer certificate held in repo secrets
-# and publishes it for over-the-air install, so a device can be provisioned
-# without a Mac, Xcode, or iTunes anywhere in the loop.
+# Re-signs an .ipa and publishes it for over-the-air install, so a device can
+# be provisioned with no Mac, Xcode or iTunes anywhere in the loop.
 #
-# Requires three secrets (see the README section "Rotating the signing
-# secrets" for how to produce them):
-#   IOS_SIGNING_P12_BASE64          base64 of the .p12 (certificate + private key)
-#   IOS_SIGNING_P12_PASSWORD        the password that .p12 was exported with
-#   IOS_PROVISIONING_PROFILE_BASE64 base64 of the .mobileprovision
+# It needs no signing secrets of its own. The App Store Connect API key this
+# repo already holds for TestFlight can mint everything signing requires:
+# fastlane generates a keypair on the runner, has Apple issue a development
+# certificate against it, registers the App ID, and builds a provisioning
+# profile covering the account's registered devices. The certificate never
+# leaves the job.
 #
-# The profile decides which devices can install the result: a development or
-# ad-hoc profile only covers the UDIDs registered in it.
+# The one thing no API can discover is a phone's UDID, so a device has to be
+# registered once — pass it as the `udid` input and this workflow registers it.
+#
+# Installs only work on devices in the profile: that is the usual reason an
+# over-the-air install fails silently.
 
 on:
   workflow_dispatch:
@@ -21,7 +24,11 @@ on:
         required: false
         type: string
       bundle_id:
-        description: 'Optional bundle identifier override'
+        description: 'Bundle id to sign under (blank = com.<owner>.<app name>)'
+        required: false
+        type: string
+      udid:
+        description: 'Device UDID to register first (blank = use devices already on the account)'
         required: false
         type: string
 
@@ -62,73 +69,141 @@ jobs:
           fi
           echo "IPA size: $(du -h unsigned.ipa | cut -f1)"
 
-      - name: Apply the bundle identifier override
-        if: ${{ inputs.bundle_id != '' }}
+      - name: Decide the bundle identifier
         env:
-          BUNDLE_ID: ${{ inputs.bundle_id }}
+          BUNDLE_ID_INPUT: ${{ inputs.bundle_id }}
         run: |
           set -euo pipefail
-          # Done before signing, on the Info.plist itself, so it applies
-          # whichever of the two signing paths below ends up running.
           rm -rf rebundle && mkdir rebundle && cd rebundle
           unzip -qq ../unsigned.ipa
           APP="$(find Payload -maxdepth 1 -name '*.app' | head -1)"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
-          rm -f ../unsigned.ipa
-          zip -qry ../unsigned.ipa Payload
-          echo "Bundle identifier set to $BUNDLE_ID"
+          ORIGINAL="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
 
-      - name: Create a temporary keychain and import the signing identity
+          if [ -n "$BUNDLE_ID_INPUT" ]; then
+            BUNDLE_ID="$BUNDLE_ID_INPUT"
+          else
+            # Bundle ids are globally unique across all of Apple's developers,
+            # so the original almost certainly belongs to whoever built the app
+            # and cannot be registered here. Derive one in the account's own
+            # namespace instead — the same thing Sideloadly does.
+            SLUG="$(basename "$APP" .app | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
+            BUNDLE_ID="com.${GITHUB_REPOSITORY_OWNER}.${SLUG}"
+          fi
+          echo "BUNDLE_ID=$BUNDLE_ID" >> "$GITHUB_ENV"
+          echo "Signing $ORIGINAL as $BUNDLE_ID"
+
+          if [ "$ORIGINAL" != "$BUNDLE_ID" ]; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
+            rm -f ../unsigned.ipa
+            zip -qry ../unsigned.ipa Payload
+          fi
+
+      - name: Write the App Store Connect API key
         env:
-          P12_BASE64: ${{ secrets.IOS_SIGNING_P12_BASE64 }}
-          P12_PASSWORD: ${{ secrets.IOS_SIGNING_P12_PASSWORD }}
-          PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          for required in P12_BASE64 P12_PASSWORD PROFILE_BASE64; do
+          for required in KEY_ID ISSUER_ID PRIVATE_KEY; do
             if [ -z "${!required:-}" ]; then
-              echo "::error::Secret for $required is empty or unset." >&2
+              echo "::error::Secret for APPSTORE_$required is empty or unset." >&2
               exit 1
             fi
           done
+          # jq escapes the PEM's newlines properly; hand-rolled JSON does not.
+          jq -n --arg key_id "$KEY_ID" --arg issuer_id "$ISSUER_ID" --arg key "$PRIVATE_KEY" \
+            '{key_id: $key_id, issuer_id: $issuer_id, key: $key, in_house: false}' \
+            > "$RUNNER_TEMP/asc_key.json"
+          chmod 600 "$RUNNER_TEMP/asc_key.json"
 
+      - name: Register the device
+        if: ${{ inputs.udid != '' }}
+        env:
+          UDID: ${{ inputs.udid }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          # Already-registered UDIDs make this fail; that is not a problem.
+          fastlane run register_device \
+            udid:"$UDID" \
+            name:"ota-$(date -u +%Y%m%d)" \
+            team_id:"$TEAM_ID" \
+            api_key_path:"$RUNNER_TEMP/asc_key.json" || \
+            echo "Device registration reported an error (usually: already registered) — continuing."
+
+      - name: Create a temporary keychain
+        run: |
+          set -euo pipefail
           KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          # Random, one-shot, and masked: it never needs to leave this step,
-          # and deleting the keychain later doesn't require it.
+          # Random, one-shot, masked: it never leaves this job, and deleting
+          # the keychain later does not need it.
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
           echo "::add-mask::$KEYCHAIN_PASSWORD"
           echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          # -lut with no -t disables the inactivity lock that would otherwise
-          # re-lock the keychain mid-job and fail codesign.
+          # Disable the inactivity lock that would otherwise re-lock the
+          # keychain mid-job and fail codesign.
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-
-          printf '%s' "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          printf '%s' "$PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
-
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" \
-            -t cert -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null
-          # Without this, codesign triggers a UI authorisation prompt that a
-          # headless runner can never answer, and the job hangs until timeout.
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null 2>&1
-          # Put it on the search list so fastlane and codesign find it.
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
 
-          rm -f "$RUNNER_TEMP/cert.p12"
+      - name: Issue a certificate and provisioning profile
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          export FASTLANE_SKIP_UPDATE_CHECK=1
+          export FASTLANE_HIDE_CHANGELOG=1
 
-          # The identity is a certificate fingerprint and common name, not a
-          # secret; both are printed by codesign on any signed binary anyway.
-          IDENTITY_LINE="$(security find-identity -v -p codesigning "$KEYCHAIN" | head -1)"
-          if [ -z "$IDENTITY_LINE" ]; then
-            echo "::error::No codesigning identity found in the keychain — is IOS_SIGNING_P12_BASE64 a certificate *with* its private key?" >&2
+          # A development certificate, issued against a keypair generated here.
+          # Apple caps how many can exist at once; if this fails with a limit
+          # error, revoke the unused ones in Certificates, Identifiers & Profiles.
+          fastlane cert \
+            --development \
+            --api_key_path "$RUNNER_TEMP/asc_key.json" \
+            --team_id "$TEAM_ID" \
+            --keychain_path "$KEYCHAIN" \
+            --keychain_password "$KEYCHAIN_PASSWORD" \
+            --output_path "$RUNNER_TEMP/certs"
+
+          # The App ID has to exist before a profile can reference it.
+          fastlane run produce \
+            app_identifier:"$BUNDLE_ID" \
+            app_name:"$BUNDLE_ID" \
+            skip_itc:true \
+            team_id:"$TEAM_ID" \
+            api_key_path:"$RUNNER_TEMP/asc_key.json" || \
+            echo "App ID creation reported an error (usually: already exists) — continuing."
+
+          # --development builds a profile covering every registered device.
+          fastlane sigh \
+            --development \
+            --api_key_path "$RUNNER_TEMP/asc_key.json" \
+            --team_id "$TEAM_ID" \
+            --app_identifier "$BUNDLE_ID" \
+            --output_path "$RUNNER_TEMP/profiles" \
+            --filename profile.mobileprovision \
+            --force
+
+          PROFILE="$RUNNER_TEMP/profiles/profile.mobileprovision"
+          echo "PROFILE=$PROFILE" >> "$GITHUB_ENV"
+
+          # A profile with no devices installs nowhere — say so now rather than
+          # letting the install fail silently on the phone.
+          security cms -D -i "$PROFILE" > "$RUNNER_TEMP/profile.plist"
+          DEVICES="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$RUNNER_TEMP/profile.plist" 2>/dev/null | grep -c '^ ' || true)"
+          echo "Devices in the profile: $DEVICES"
+          if [ "$DEVICES" -eq 0 ]; then
+            echo "::error::The profile contains no devices. Re-run with the udid input set to your iPhone's UDID." >&2
             exit 1
           fi
+
+          IDENTITY_LINE="$(security find-identity -v -p codesigning "$KEYCHAIN" | head -1)"
           echo "SIGNING_SHA=$(echo "$IDENTITY_LINE" | awk '{print $2}')" >> "$GITHUB_ENV"
           echo "SIGNING_NAME=$(echo "$IDENTITY_LINE" | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_ENV"
-          echo "Imported identity: $(echo "$IDENTITY_LINE" | sed -E 's/.*"(.*)".*/\1/')"
 
       - name: Re-sign with fastlane sigh
         id: sigh
@@ -138,7 +213,7 @@ jobs:
           cp unsigned.ipa signed.ipa
           fastlane sigh resign signed.ipa \
             --signing_identity "$SIGNING_NAME" \
-            --provisioning_profile "$RUNNER_TEMP/profile.mobileprovision" \
+            --provisioning_profile "$PROFILE" \
             --keychain_path "$KEYCHAIN"
 
       - name: Re-sign manually with codesign
@@ -150,12 +225,12 @@ jobs:
           unzip -qq ../unsigned.ipa
           APP="$(find Payload -maxdepth 1 -name '*.app' | head -1)"
 
-          cp "$RUNNER_TEMP/profile.mobileprovision" "$APP/embedded.mobileprovision"
-          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > profile.plist
+          cp "$PROFILE" "$APP/embedded.mobileprovision"
+          security cms -D -i "$PROFILE" > profile.plist
           /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' profile.plist > entitlements.plist
 
-          # Nested code has to be signed before the bundle that contains it,
-          # or the outer signature seals stale inner ones.
+          # Nested code has to be signed before the bundle containing it, or
+          # the outer signature seals stale inner ones.
           find "$APP" \( -name '*.framework' -o -name '*.dylib' -o -name '*.appex' \) -print0 |
             while IFS= read -r -d '' nested; do
               echo "  signing $(basename "$nested")"
@@ -184,32 +259,23 @@ jobs:
 
           plist="$APP/Info.plist"
           {
-            echo "APP_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")"
             echo "APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist" 2>/dev/null || echo 1.0)"
             echo "APP_TITLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$plist" 2>/dev/null \
                               || /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist")"
           } >> "$GITHUB_ENV"
 
-      - name: Publish the signed IPA as a release
+      - name: Publish the IPA and its install manifest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           TAG="signed-$(date -u +%Y%m%d-%H%M%S)"
-          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
-          gh release create "$TAG" signed.ipa \
-            --title "Signed $APP_TITLE $APP_VERSION" \
-            --notes "Re-signed $APP_BUNDLE_ID for over-the-air install. Only devices in the provisioning profile can install it."
-          # installd fetches this itself, unauthenticated, so it has to be the
-          # public asset URL rather than an API one.
-          echo "ASSET_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/signed.ipa" >> "$GITHUB_ENV"
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
 
-      - name: Publish the OTA manifest to GitHub Pages
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cat > "$RUNNER_TEMP/manifest.plist" <<PLIST
+          # installd fetches both of these itself, unauthenticated, so they
+          # have to be public release assets. Serving the manifest here rather
+          # than from Pages keeps the whole thing to one publishing step.
+          cat > manifest.plist <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -221,12 +287,12 @@ jobs:
                 <array>
                   <dict>
                     <key>kind</key><string>software-package</string>
-                    <key>url</key><string>${ASSET_URL}</string>
+                    <key>url</key><string>${BASE}/signed.ipa</string>
                   </dict>
                 </array>
                 <key>metadata</key>
                 <dict>
-                  <key>bundle-identifier</key><string>${APP_BUNDLE_ID}</string>
+                  <key>bundle-identifier</key><string>${BUNDLE_ID}</string>
                   <key>bundle-version</key><string>${APP_VERSION}</string>
                   <key>kind</key><string>software</string>
                   <key>title</key><string>${APP_TITLE}</string>
@@ -237,26 +303,12 @@ jobs:
           </plist>
           PLIST
 
-          PAGES_DIR="$RUNNER_TEMP/pages"
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git clone --depth 1 --branch gh-pages "$REMOTE" "$PAGES_DIR" 2>/dev/null; then
-            echo "Updating the existing gh-pages branch."
-          else
-            echo "Creating the gh-pages branch."
-            git clone --depth 1 "$REMOTE" "$PAGES_DIR"
-            git -C "$PAGES_DIR" checkout --orphan gh-pages
-            git -C "$PAGES_DIR" rm -rqf . >/dev/null 2>&1 || true
-          fi
+          gh release create "$TAG" signed.ipa manifest.plist \
+            --title "Signed $APP_TITLE $APP_VERSION" \
+            --notes "Re-signed as \`$BUNDLE_ID\` for over-the-air install. Only devices in the provisioning profile can install it. Delete this release once installed."
 
-          cp "$RUNNER_TEMP/manifest.plist" "$PAGES_DIR/manifest.plist"
-          git -C "$PAGES_DIR" config user.name  "github-actions[bot]"
-          git -C "$PAGES_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$PAGES_DIR" add manifest.plist
-          git -C "$PAGES_DIR" commit -qm "Manifest for ${RELEASE_TAG}"
-          git -C "$PAGES_DIR" push -q origin gh-pages
-
-          OWNER="$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')"
-          echo "MANIFEST_URL=https://${OWNER}.github.io/${GITHUB_REPOSITORY##*/}/manifest.plist" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "MANIFEST_URL=${BASE}/manifest.plist" >> "$GITHUB_ENV"
 
       - name: Summarise
         run: |
@@ -265,26 +317,28 @@ jobs:
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| Bundle id | \`$APP_BUNDLE_ID\` |"
+            echo "| Bundle id | \`$BUNDLE_ID\` |"
             echo "| Identity | $SIGNING_NAME |"
             echo "| Release | \`$RELEASE_TAG\` |"
             echo
             echo "### Install over the air"
             echo
-            echo "Open this in **Safari** on a device registered in the provisioning profile:"
+            echo "Open this in **Safari** on a device registered in the profile:"
             echo
             echo '```'
             echo "itms-services://?action=download-manifest&url=${MANIFEST_URL}"
             echo '```'
             echo
-            echo "If nothing happens, GitHub Pages is not serving \`${MANIFEST_URL}\` yet —"
-            echo "enable Pages for this repo with the \`gh-pages\` branch as its source."
+            echo "Then trust the certificate: Settings → General → VPN & Device Management."
+            echo
+            echo "Delete the \`$RELEASE_TAG\` release once installed — the IPA is public while it exists."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Delete the keychain
+      - name: Clean up
         if: always()
         run: |
           if [ -n "${KEYCHAIN:-}" ] && [ -f "$KEYCHAIN" ]; then
             security delete-keychain "$KEYCHAIN" || true
           fi
-          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/profile.mobileprovision" || true
+          rm -rf "$RUNNER_TEMP/asc_key.json" "$RUNNER_TEMP/certs" "$RUNNER_TEMP/profiles" \
+                 "$RUNNER_TEMP/profile.plist" || true
