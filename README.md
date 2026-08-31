@@ -46,13 +46,6 @@ The **Sign IPA** workflow (`.github/workflows/sign-ipa.yml`) re-signs any
 `.ipa` and publishes it for over-the-air install, so a device can be
 provisioned with no Mac, Xcode or iTunes involved.
 
-It adds no secrets. The App Store Connect API key already used for TestFlight
-(`APPSTORE_KEY_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_PRIVATE_KEY`,
-`APPLE_TEAM_ID`) is enough: fastlane generates a keypair on the runner, has
-Apple issue a development certificate against it, registers the App ID, and
-builds a provisioning profile. The certificate never leaves the job, and the
-keychain holding it is deleted in an `always()` step.
-
 Run it from **Actions → Sign IPA → Run workflow**:
 
 | Input | Meaning |
@@ -61,26 +54,74 @@ Run it from **Actions → Sign IPA → Run workflow**:
 | `bundle_id` | What to sign under. Blank derives `com.<owner>.<app name>`. |
 | `udid` | A device UDID to register first. Blank uses whatever devices the account already has. |
 
-The bundle id is rewritten before signing because bundle ids are globally
-unique across all Apple developers — a third-party app's own id belongs to
-whoever built it and can't be registered here.
+The App ID and the provisioning profile are created automatically through the
+App Store Connect API key this repo already holds for TestFlight
+(`APPSTORE_KEY_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_PRIVATE_KEY`,
+`APPLE_TEAM_ID`). Neither is capped, so neither needs any attention.
 
-**A device UDID is the one thing that can't be automated.** No API can
-discover a phone's UDID; it has to be read off the device once and passed in
-via `udid`. After that the device stays registered and the input can be left
-blank. A profile with no devices installs nowhere, so the workflow fails
-early and says so rather than letting the install fail silently on the phone.
+### Store the certificate
+
+The **certificate** is the part that does need setting up once, in two
+secrets:
+
+| Secret | Contents |
+| --- | --- |
+| `IOS_SIGNING_P12_BASE64` | base64 of a `.p12` holding the certificate **and its private key** |
+| `IOS_SIGNING_P12_PASSWORD` | the password the `.p12` was exported with |
+
+Without them the workflow asks Apple for a new certificate on every run, and
+that does not survive contact with reality: a fresh runner can never reuse an
+existing certificate, because the private key died with the machine that
+created it. Apple caps how many development certificates can exist at once,
+so minting one per run exhausts the cap within a couple of runs and then
+fails permanently — no amount of revoking keeps up.
+
+Creating the `.p12` takes about five minutes and needs no Mac. On Windows,
+Git Bash has the `openssl` used below.
+
+**1. Make a key and a certificate request:**
+
+```sh
+openssl genrsa -out ios.key 2048
+openssl req -new -key ios.key -out ios.csr -subj "/emailAddress=you@example.com/CN=Your Name/C=TR"
+```
+
+**2. Turn it into a certificate.** At
+[developer.apple.com](https://developer.apple.com/account/resources/certificates/list)
+→ **+** → *Apple Development* → upload `ios.csr` → download `ios.cer`. Revoke
+an unused development certificate first if the account is at its cap.
+
+```sh
+openssl x509 -in ios.cer -inform DER -out ios.pem -outform PEM
+openssl pkcs12 -export -inkey ios.key -in ios.pem -out ios.p12
+```
+
+The export password you choose is `IOS_SIGNING_P12_PASSWORD`.
+
+**3. Load the secrets:**
+
+```sh
+base64 -w0 ios.p12    # → IOS_SIGNING_P12_BASE64
+```
+
+Git Bash and macOS have no `-w0`; use `base64 -i ios.p12` there. Paste into
+**Settings → Secrets and variables → Actions**, then delete `ios.key` and
+`ios.p12` — anyone holding them can sign as you.
+
+This certificate lasts a year. Rotating it is the same three steps, and a
+leaked one is revoked on the same portal page — anything signed with it stops
+launching immediately.
+
+### Installing
+
+**A device UDID can't be automated.** No API can discover a phone's UDID; it
+is read off the device once and passed via `udid`, after which the device
+stays registered. A profile with no devices installs nowhere, so the workflow
+fails early rather than letting the install fail silently on the phone.
 
 The job summary prints an `itms-services://` link — open it in Safari on a
 registered device, then trust the certificate under Settings → General → VPN
 & Device Management.
 
-The IPA and its manifest are published as **public** release assets, because
-iOS fetches both itself with no credentials. Delete the release once the app
-is installed.
-
-Apple caps how many development certificates can exist at once, and each run
-issues a new one. If a run fails on that limit, revoke the unused ones in
-[Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list) —
-that is also where a leaked certificate is revoked, and anything signed with
-it stops launching immediately.
+The IPA and its manifest publish as **public** release assets, because iOS
+fetches both itself with no credentials. Delete the release once installed.
