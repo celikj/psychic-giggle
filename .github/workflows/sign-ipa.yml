@@ -170,13 +170,11 @@ jobs:
             --output_path "$RUNNER_TEMP/certs"
 
           # The App ID has to exist before a profile can reference it.
-          fastlane run produce \
-            app_identifier:"$BUNDLE_ID" \
-            app_name:"$BUNDLE_ID" \
-            skip_itc:true \
-            team_id:"$TEAM_ID" \
-            api_key_path:"$RUNNER_TEMP/asc_key.json" || \
-            echo "App ID creation reported an error (usually: already exists) — continuing."
+          # fastlane's `produce` can't do this: it only authenticates with a
+          # username and password, and rejects api_key_path outright. So the
+          # App Store Connect API is called directly.
+          ASC_KEY_JSON="$RUNNER_TEMP/asc_key.json" BUNDLE_ID="$BUNDLE_ID" \
+            ruby scripts/asc-register-bundle-id.rb
 
           # --development builds a profile covering every registered device.
           fastlane sigh \
