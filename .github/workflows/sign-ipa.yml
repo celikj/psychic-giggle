@@ -217,12 +217,19 @@ jobs:
           # runner can retrieve it — and creates the profile itself. Nothing
           # is minted against Apple's certificate cap, which is what made the
           # earlier fastlane cert approach fail permanently.
+          #
+          # ad-hoc, not development: an API key can drive distribution signing
+          # (it is what TestFlight exports with here) but reported a bare
+          # "Authentication failed" for every target when asked for
+          # development profiles. ad-hoc signs with the distribution
+          # certificate and embeds the registered devices, which is what
+          # over-the-air install wants anyway.
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>method</key><string>development</string>
+            <key>method</key><string>ad-hoc</string>
             <key>destination</key><string>export</string>
             <key>teamID</key><string>${TEAM_ID}</string>
             <key>signingStyle</key><string>automatic</string>
@@ -247,6 +254,11 @@ jobs:
               break
             fi
             if [ "$attempt" = 3 ]; then
+              # "Authentication failed" on the console is a summary; the
+              # actual reason is in Xcode's distribution log.
+              echo "--- Xcode distribution logs ---"
+              find "${TMPDIR:-/tmp}" -maxdepth 2 -name 'IDEDistribution.standard.log' -newermt '-15 minutes' \
+                -exec sh -c 'echo "== $1"; tail -80 "$1"' _ {} \; 2>/dev/null || true
               echo "::error::Export failed after 3 attempts." >&2
               exit 65
             fi
