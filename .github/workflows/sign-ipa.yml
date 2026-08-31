@@ -3,15 +3,18 @@ name: Sign IPA
 # Re-signs an .ipa and publishes it for over-the-air install, so a device can
 # be provisioned with no Mac, Xcode or iTunes anywhere in the loop.
 #
-# It needs no signing secrets of its own, and creates no certificates. The app
-# is wrapped in an .xcarchive and handed to `xcodebuild -exportArchive` with
-# automatic signing, exactly as the TestFlight workflow signs the real app:
-# Xcode fetches a cloud-managed certificate, whose private key Apple holds and
-# any runner can retrieve, and builds the provisioning profile itself.
+# It needs no signing secrets of its own: the App Store Connect API key this
+# repo already holds for TestFlight mints the certificate and profiles, and
+# codesign does the signing.
 #
-# An earlier version had fastlane issue a certificate per run instead. That
-# cannot work: a fresh runner can never reuse an existing certificate, and
-# Apple caps how many can exist, so it failed permanently after two runs.
+# Two dead ends are worth recording. Xcode's cloud signing — the mechanism the
+# TestFlight workflow uses — refuses to authenticate against a synthetic
+# archive, failing with a bare "Authentication failed" per target for both
+# development and ad-hoc methods. And minting a certificate per run hits
+# Apple's cap after a couple of runs, because a fresh runner can never reuse an
+# existing one; the private key died with the machine that made it. Hence the
+# prune step: the account is kept at exactly one development certificate, the
+# one each run creates.
 #
 # The one thing no API can discover is a phone's UDID, so a device has to be
 # registered once — pass it as the `udid` input and this workflow registers it.
@@ -136,14 +139,6 @@ jobs:
             > "$RUNNER_TEMP/asc_key.json"
           chmod 600 "$RUNNER_TEMP/asc_key.json"
 
-          # xcodebuild wants the raw .p8 on disk, in the location the
-          # TestFlight workflow also uses.
-          mkdir -p ~/private_keys
-          # echo, not printf '%s': the trailing newline matters. Without it
-          # exportArchive fails with a bare "Authentication failed".
-          echo "$PRIVATE_KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
-          chmod 600 ~/private_keys/AuthKey_${KEY_ID}.p8
-
       - name: Register the device
         if: ${{ inputs.udid != '' }}
         env:
@@ -169,110 +164,121 @@ jobs:
               ruby scripts/asc-register-bundle-id.rb
           done
 
-      - name: Build an archive around the app
+      - name: Create a temporary keychain
         run: |
           set -euo pipefail
-          # xcodebuild can only re-sign something it considers an archive, so
-          # wrap the .app in the minimum structure that satisfies it.
-          ARCHIVE="$RUNNER_TEMP/app.xcarchive"
-          rm -rf "$ARCHIVE" work && mkdir -p "$ARCHIVE/Products/Applications" work
-          cd work && unzip -qq ../unsigned.ipa && cd ..
-          APP_SRC="$(find work/Payload -maxdepth 1 -name '*.app' | head -1)"
-          APP_NAME="$(basename "$APP_SRC")"
-          cp -R "$APP_SRC" "$ARCHIVE/Products/Applications/$APP_NAME"
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
 
-          plist="$ARCHIVE/Products/Applications/$APP_NAME/Info.plist"
-          SHORT="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist" 2>/dev/null || echo 1.0)"
-          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist" 2>/dev/null || echo 1)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Disable the inactivity lock that would otherwise re-lock the
+          # keychain mid-job and fail codesign.
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
 
-          cat > "$ARCHIVE/Info.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>ApplicationProperties</key>
-            <dict>
-              <key>ApplicationPath</key><string>Applications/${APP_NAME}</string>
-              <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
-              <key>CFBundleShortVersionString</key><string>${SHORT}</string>
-              <key>CFBundleVersion</key><string>${BUILD}</string>
-            </dict>
-            <key>ArchiveVersion</key><integer>2</integer>
-            <key>Name</key><string>${APP_NAME%.app}</string>
-            <key>SchemeName</key><string>${APP_NAME%.app}</string>
-          </dict>
-          </plist>
-          PLIST
-          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
-
-      - name: Re-sign with Xcode cloud signing
+      - name: Issue a certificate and one profile per bundle id
         env:
-          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          # The same mechanism the TestFlight workflow uses. Xcode fetches a
-          # cloud-managed certificate — Apple holds its private key, so any
-          # runner can retrieve it — and creates the profile itself. Nothing
-          # is minted against Apple's certificate cap, which is what made the
-          # earlier fastlane cert approach fail permanently.
-          #
-          # ad-hoc, not development: an API key can drive distribution signing
-          # (it is what TestFlight exports with here) but reported a bare
-          # "Authentication failed" for every target when asked for
-          # development profiles. ad-hoc signs with the distribution
-          # certificate and embeds the registered devices, which is what
-          # over-the-air install wants anyway.
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>ad-hoc</string>
-            <key>destination</key><string>export</string>
-            <key>teamID</key><string>${TEAM_ID}</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>compileBitcode</key><false/>
-            <key>stripSwiftSymbols</key><false/>
-            <key>thinning</key><string>&lt;none&gt;</string>
-          </dict>
-          </plist>
-          PLIST
+          export FASTLANE_SKIP_UPDATE_CHECK=1
+          export FASTLANE_HIDE_CHANGELOG=1
 
-          # A brand-new bundle id often fails the first export while the
-          # profile propagates, exactly as the TestFlight archive step does.
-          for attempt in 1 2 3; do
-            if xcodebuild -exportArchive \
-              -archivePath "$ARCHIVE" \
-              -exportPath "$RUNNER_TEMP/export" \
-              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-              -allowProvisioningUpdates \
-              -authenticationKeyPath ~/private_keys/AuthKey_${KEY_ID}.p8 \
-              -authenticationKeyID "$KEY_ID" \
-              -authenticationKeyIssuerID "$ISSUER_ID"; then
-              break
-            fi
-            if [ "$attempt" = 3 ]; then
-              # "Authentication failed" on the console is a summary; the
-              # actual reason is in Xcode's distribution log.
-              echo "--- Xcode distribution logs ---"
-              find "${TMPDIR:-/tmp}" -maxdepth 2 -name 'IDEDistribution.standard.log' -newermt '-15 minutes' \
-                -exec sh -c 'echo "== $1"; tail -80 "$1"' _ {} \; 2>/dev/null || true
-              echo "::error::Export failed after 3 attempts." >&2
-              exit 65
-            fi
-            echo "Export attempt $attempt failed; retrying in 45s..."
-            rm -rf "$RUNNER_TEMP/export"
-            sleep 45
+          # A runner can never reuse an existing certificate — the private key
+          # died with the machine that made it — so one has to be minted here,
+          # and Apple's cap blocks that once a few have accumulated. Clearing
+          # the development certificates first keeps the account at a steady
+          # state of exactly one: the one this run is about to create.
+          # Distribution certificates, which App Store builds are signed with,
+          # are left untouched.
+          ASC_KEY_JSON="$RUNNER_TEMP/asc_key.json" \
+            ruby scripts/asc-prune-dev-certificates.rb 0
+
+          fastlane cert \
+            --development \
+            --api_key_path "$RUNNER_TEMP/asc_key.json" \
+            --team_id "$TEAM_ID" \
+            --keychain_path "$KEYCHAIN" \
+            --keychain_password "$KEYCHAIN_PASSWORD" \
+            --output_path "$RUNNER_TEMP/certs"
+
+          # Every bundle in the app needs its own profile: the app and each of
+          # its extensions sign against their own App ID.
+          mkdir -p "$RUNNER_TEMP/profiles"
+          for id in $ALL_BUNDLE_IDS; do
+            fastlane sigh \
+              --development \
+              --api_key_path "$RUNNER_TEMP/asc_key.json" \
+              --team_id "$TEAM_ID" \
+              --app_identifier "$id" \
+              --output_path "$RUNNER_TEMP/profiles" \
+              --filename "${id}.mobileprovision" \
+              --force
           done
 
-          SIGNED="$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)"
-          if [ -z "$SIGNED" ]; then
-            echo "::error::Export produced no .ipa." >&2
+          PROFILE="$RUNNER_TEMP/profiles/${BUNDLE_ID}.mobileprovision"
+          security cms -D -i "$PROFILE" > "$RUNNER_TEMP/profile.plist"
+          DEVICES="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$RUNNER_TEMP/profile.plist" 2>/dev/null | grep -c '^ ' || true)"
+          echo "Devices in the profile: $DEVICES"
+          if [ "$DEVICES" -eq 0 ]; then
+            echo "::error::The profile contains no devices. Re-run with the udid input set." >&2
             exit 1
           fi
-          cp "$SIGNED" signed.ipa
+
+          IDENTITY_LINE="$(security find-identity -v -p codesigning "$KEYCHAIN" | head -1)"
+          echo "SIGNING_SHA=$(echo "$IDENTITY_LINE" | awk '{print $2}')" >> "$GITHUB_ENV"
+          echo "SIGNING_NAME=$(echo "$IDENTITY_LINE" | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_ENV"
+          echo "Signing identity: $(echo "$IDENTITY_LINE" | sed -E 's/.*"(.*)".*/\1/')"
+
+      - name: Sign
+        run: |
+          set -euo pipefail
+          rm -rf work && mkdir work && cd work
+          unzip -qq ../unsigned.ipa
+          APP="$(find Payload -maxdepth 1 -name '*.app' | head -1)"
+
+          entitlements_for() {
+            security cms -D -i "$1" > "$RUNNER_TEMP/p.plist"
+            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$RUNNER_TEMP/p.plist" > "$2"
+          }
+
+          # Nested code first, the bundle containing it last, or the outer
+          # signature seals stale inner ones. Frameworks carry no entitlements.
+          if [ -d "$APP/Frameworks" ]; then
+            for lib in "$APP"/Frameworks/*; do
+              [ -e "$lib" ] || continue
+              echo "  signing $(basename "$lib")"
+              codesign -f -s "$SIGNING_SHA" --keychain "$KEYCHAIN" --timestamp=none "$lib"
+            done
+          fi
+
+          # Each extension signs against its own App ID, so it gets its own
+          # profile and entitlements.
+          if [ -d "$APP/PlugIns" ]; then
+            for ext in "$APP"/PlugIns/*.appex; do
+              [ -d "$ext" ] || continue
+              ext_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$ext/Info.plist")"
+              ext_profile="$RUNNER_TEMP/profiles/${ext_id}.mobileprovision"
+              cp "$ext_profile" "$ext/embedded.mobileprovision"
+              entitlements_for "$ext_profile" "$RUNNER_TEMP/ext.entitlements"
+              echo "  signing $(basename "$ext") as $ext_id"
+              codesign -f -s "$SIGNING_SHA" --keychain "$KEYCHAIN" --timestamp=none \
+                --entitlements "$RUNNER_TEMP/ext.entitlements" "$ext"
+            done
+          fi
+
+          cp "$RUNNER_TEMP/profiles/${BUNDLE_ID}.mobileprovision" "$APP/embedded.mobileprovision"
+          entitlements_for "$RUNNER_TEMP/profiles/${BUNDLE_ID}.mobileprovision" "$RUNNER_TEMP/app.entitlements"
+          echo "  signing $(basename "$APP") as $BUNDLE_ID"
+          codesign -f -s "$SIGNING_SHA" --keychain "$KEYCHAIN" --timestamp=none \
+            --entitlements "$RUNNER_TEMP/app.entitlements" "$APP"
+
+          rm -f ../signed.ipa
+          zip -qry ../signed.ipa Payload
 
       - name: Verify the signature and read the app metadata
         run: |
@@ -368,7 +374,8 @@ jobs:
       - name: Clean up
         if: always()
         run: |
-          # No keychain to tear down any more — Xcode manages its own. What is
-          # left is the API key in two forms.
-          rm -f "$RUNNER_TEMP/asc_key.json" || true
-          rm -rf ~/private_keys || true
+          if [ -n "${KEYCHAIN:-}" ] && [ -f "$KEYCHAIN" ]; then
+            security delete-keychain "$KEYCHAIN" || true
+          fi
+          rm -f "$RUNNER_TEMP/asc_key.json" "$RUNNER_TEMP/p.plist" || true
+          rm -rf ~/private_keys "$RUNNER_TEMP/certs" "$RUNNER_TEMP/profiles" || true
